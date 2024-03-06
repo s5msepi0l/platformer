@@ -1,140 +1,89 @@
 #ifndef PLATFORMER_GAME
 #define PLATFORMER_GAME
 
-#include "renderer.h"
+#include "game_engine.h"
 
-enum class keyboard_event{
-    null,
-    quit,
-    forward,
-    backward,
-    left,
-    right
-};
+using namespace game_engine;
 
-//manages the amount of time should be slept to keep a consistent framerate
-class frametime_manager {
-private:
-    u8 frame_time;
-
-    u32 start_time;
-    u32 elapsed_time;
-
-public:
-    inline frametime_manager(u8 Frame_time = 60) {
-        frame_time = static_cast<u8>(std::floor(1000.0 / frame_time));
-    }
-
-    inline void set_frametime(u8 Frame_time) { this->frame_time = Frame_time; }
-
-    inline void set_start() {
-        start_time = SDL_GetTicks();
-        
-    }
-
-
-    // call this function after you've finished frame creating, rendering, keyboard polling etc and are
-    // about to restart the loop
-    inline void set_end() {
-        elapsed_time = SDL_GetTicks() - start_time;
-        if (elapsed_time < frame_time) {
-            SDL_Delay(frame_time - elapsed_time);
-        }
-    }
-
-};
-
-class keyboard_input {
+class Player1: public component {
     private:
-        SDL_Event event;
+        keyboard_input input;
+        f32 speed = 4;
+
     public:
-        keyboard_event poll() {
-            while (SDL_PollEvent(&event) != 0) {
-                if (event.type == SDL_QUIT) return keyboard_event::quit;
-                
-                if (event.type == SDL_KEYDOWN) {
-                        switch( event.key.keysym.sym ) {
-                            case SDLK_UP: 
-                                return keyboard_event::forward; 
-                            
-                            case SDLK_DOWN: 
-                                return keyboard_event::backward;
-                            
-                            case SDLK_LEFT: 
-                                return keyboard_event::left;
+        void stop() override {}
+        void collision_enter(game_object *other) override {
+            std::cout << "enter\n";
+        }
+        void collision_exit(game_object *other) override {
+            std::cout << "\n\n\n__EXIT__\n\n\n";
 
-                            case SDLK_RIGHT: 
-                                return keyboard_event::right;
+            auto *pos = &other->pos;
+            pos->x = (self->pos.x + pos->x/2) / 2;
+            pos->y = (self->pos.y + pos->y/2) / 2;
+        }
 
-                            default:
-                                std::cout << "idfk bro\n";
-                                break; 
-                        }
-                    }   
-                }
-            return keyboard_event::null;
-        } 
 
+        void start() override {
+            std::cout << "start\n";
+
+        }
+
+        void update() override {
+            f_vec_2D event = input.poll();
+            self->pos += (event * speed);
+        }
 };
+
+class Player2: public component {
+
+    public:
+        void stop() override {}
+        void collision_enter(game_object *other) override {}
+        void collision_exit(game_object *other) override {}
+
+
+        void start() override {
+            std::cout << "start2\n";
+        }
+
+        void update() override {}
+};
+
 
 class game {
-    private:
-        pipeline_renderer renderer;
-        frametime_manager frametime;
-        keyboard_input k_input;
-        bool running;
+private:
+    engine Engine;
+
+public:
+    game(std::string name, u16 width, u16 height, u8 framerate):
+    Engine(name, width, height, framerate) {
+    }
+
+    void run() {
+        Player1 script1;
+        game_object p1;
+        p1.add_component(&script1);
         
+        p1.size = f_vec_2D(14, 14);
+        p1.load_model("./img/char/base1.bmp");
 
-    public:
-        game(i32 xres = 1280, i32 yres = 720, u8 Framerate = 60):
-        renderer(xres, yres, "Platformer"),
-        frametime(Framerate),
-        running(true){
-            std::srand(std::time(0));
+        if (Engine.add_object(&p1)) {
+            std::cout << "added object\n";
         }
 
-        //main entry point
-            /*    std::srand(time(0));
+        Player2 script2;
+        game_object p2;
+        p2.add_component(&script2);
+        
+        p2.size = f_vec_2D(2, 2);
+        p2.load_model("./img/char/base.bmp");
 
-            pipeline_renderer window(width, height, "Platformer");
+        Engine.add_static_object(&p2);
+            std::cout << "added object\n";
 
-            for (i32 i = 0; i<1000 * 1000; i++){
-                window.test();
-                SDL_Delay(1);
-            }
-
-            buffer_2D<rgb_sprite> buffer(20, 20);
-            buffer[10][10] = rgb_sprite{rgb{0,0,255},1};
-            buffer[12][12] = rgb_sprite{rgb{0,255,0},1};
-
-            f_vec_2D pos(5.0, 5.0);
-
-            for (i32 i = 0; i<10; i++) {
-                window.clear_pipeline();
-                window.pipeline_input(buffer, pos);
-                pos.x += 1.0;            
-                window.pipeline_input(buffer, pos);
-                
-                SDL_Delay(1000);
-            }*/
-        u8 run() {
-
-
-            while (this->running) {
-                keyboard_event event = k_input.poll();
-                frametime.set_start();
-
-                
-
-                frametime.set_end();        
-                running = false;
-            }
-
-            return 0;
-        }
-
-    private:
-
+        Engine.run();
+    }
 };
 
 #endif
