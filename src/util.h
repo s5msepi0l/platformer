@@ -8,7 +8,14 @@
 #include <map>
 #include <list>
 #include <unordered_map>
+
 #include <SDL2/SDL.h>
+
+#if defined(__linux__)
+    #define sleep(ms) usleep(ms * 1000)
+#else // windows or some other distro ig
+
+#endif
 
 namespace std {
     //generally used for holding ascii values or 
@@ -28,73 +35,153 @@ namespace std {
 #define u64 uint64_t
 #define i64 int64_t
 
-//general coordinate struct
-typedef struct f_vec_2D {
-    f32 x;
-    f32 y;
+//https://tutorialedge.net/gamedev/aabb-collision-detection-tutorial/
+#define AABB(p1x, p1y, p1w, p1h, p2x, p2y, p2w, p2h) \
+    (p1x < p2x + p2w &&     \
+    p1x + p1w > p2x &&      \
+    p1y < p2y + p2h &&      \
+    p1y + p1h > p2y         \
+    )
 
-    f_vec_2D(): x(0), y(0) {}
-    f_vec_2D(f32 X, f32 Y): x(X), y(Y) {}
+//general coordinate struct
+template <typename T>
+struct vector2 {
+    T x;
+    T y;
+
+    vector2(): x(0), y(0) {}
+    vector2(T X, T Y): x(X), y(Y) {}
 
 
     // √(x_2-x_1)²+(y_2-y_1)²
-    inline f32 distance_to(f_vec_2D other) const {
-        return static_cast<f32>(sqrt(pow(other.x, 2) + pow(other.y, 2)));
+    inline T distance_to(vector2 other) const {
+        return static_cast<T>(sqrt(pow(other.x, 2) + pow(other.y, 2)));
     }
 
-    inline f32 distance_to(f32 x_pos, f32 y_pos) const {
-        return static_cast<f32>(sqrt(pow(x_pos, 2) + pow(y_pos, 2)));
+    inline T distance_to(T x_pos, T y_pos) const {
+        return static_cast<T>(sqrt(pow(x_pos, 2) + pow(y_pos, 2)));
     }
 
-    void operator+=(f_vec_2D other) {
+    void operator+=(vector2 other) {
         x += other.x;
         y += other.y;
     }
 
-    inline f_vec_2D operator*(f32 op) {
-        return f_vec_2D(this->x * op, this->y * op);
+    inline T operator*(vector2 op) {
+        return T(this->x * op, this->y * op);
+    }
+};
+
+using vec2  = vector2<f32>;
+using ivec2 = vector2<i32>;
+
+
+// basic rectangular hitbox
+typedef struct {
+    vec2 pos;
+    vec2 size;
+}Transform;
+
+//list of Transform(s)
+typedef struct hitbox{
+    u32 size;
+    Transform *data;
+
+    hitbox():
+    size(0), data(nullptr) {}
+
+    hitbox(u32 n) {
+        size = n;
+        data = new Transform[n];
     }
 
-}f_vec_2D;
+    ~hitbox() {
+        delete data;
+    }
+
+}hit_box;
 
 class keyboard_input {
 public:
-    inline f_vec_2D poll() {
-        // Get the state of all keys
-        const Uint8* currentKeyStates = SDL_GetKeyboardState(NULL);
-        f_vec_2D ret;
+    bool quit = false;
 
+    SDL_Event event;
+
+    const u8 *key_states = nullptr;
+    struct {
+        u32 buttons;
+        i32 x, y;
+    }mouse;
+
+
+    //call once at the beginning of every frame
+    inline void poll() {
+        // Get the state of all keys
+        key_states = SDL_GetKeyboardState(NULL);
+
+        mouse.buttons = SDL_GetMouseState(&mouse.x, &mouse.y);
+
+        while (SDL_PollEvent(&event)) {
+            if (event.type == SDL_QUIT)
+                quit = true;
+        }
+    }
+
+    vec2 poll_axis() {
+        vec2 ret;
         // Check if the keys are pressed using SDL_GetKeyState
-        if (currentKeyStates[SDL_SCANCODE_UP]) {
+        if (key_states[SDL_SCANCODE_UP]) {
             ret.y -= 1.0;
         }
-        if (currentKeyStates[SDL_SCANCODE_DOWN]) {
+        if (key_states[SDL_SCANCODE_DOWN]) {
             ret.y += 1.0;
         }
-        if (currentKeyStates[SDL_SCANCODE_LEFT]) {
+        if (key_states[SDL_SCANCODE_LEFT]) {
             ret.x -= 1.0;
         }
-        if (currentKeyStates[SDL_SCANCODE_RIGHT]) {
+        if (key_states[SDL_SCANCODE_RIGHT]) {
             ret.x += 1.0;
         }
 
         return ret;
     }
+
+    vec2 poll_mousepos() {
+        vec2 ret;
+
+        ret.x = static_cast<f32>(mouse.x);
+        ret.y = static_cast<f32>(mouse.y);
+
+        return ret;
+    }
+    
+    /*
+    * - Button 1:  Left mouse button "SDL_BUTTON_LMASK"
+    * - Button 2:  Middle mouse button "SDL_BUTTON_MMASK"
+    * - Button 3:  Right mouse button "SDL_BUTTON_RMASK"
+    * */
+    bool poll_mousebutton(i32 mask) {
+        return (mouse.buttons & mask);
+    }
+
+    bool poll(SDL_Scancode key) {
+        return key_states[key];
+    }
 };
 
 template <typename T>
-class buffer_2D {
+class buf2 {
 private:
     std::vector<T> data;
 
 public:
-    int width = 0;
-    int height = 0;
+    u32 width = 0;
+    u32 height = 0;
 
-    buffer_2D() {}
+    buf2() {}
 
     //preallocate memory to it (x * y * sizeof(rgb))
-    buffer_2D(int w, int h):
+    buf2(u32 w, u32 h):
     data(w * h),
     width(w),
     height(h)
@@ -105,11 +192,11 @@ public:
     std::vector<T> ref() const { return this->data; }
     inline bool is_empty() const { return data.empty(); }
 
-    T *operator[](int index) {
+    T *operator[](u32 index) {
         return &this->data[index * width];
     }
 
-    const T *operator[](int index) const {
+    const T *operator[](u32 index) const {
         return &data[index * width];
     }
 
