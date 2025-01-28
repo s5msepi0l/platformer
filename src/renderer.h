@@ -1,5 +1,4 @@
-#ifndef PLATFORMER_RENDERER
-#define PLATFORMER_RENDERER
+#pragma once
 
 #include "util.h"
 
@@ -22,15 +21,9 @@ typedef struct {
     u16 y;
 } px_offset;
 
-/* object that is generally used to handle "larger" 2d rgb data chunks be it 
- * visible player space or or a cached level space which is fed to the render pipeline 
- * I'm hoping that designing each element to only have a rgb value won't bite me in the ass later
- * automatically allocated to heap
-*/
-
-
 enum class render_type {
-    DEFAULT_RGB = 1
+    DEFAULT_RGB = 1,
+    NULL_RGB = 2 // empty / no render type selected
 };
 
 /* render object that's passed to the renderer, add different types of rendering outputs
@@ -38,13 +31,37 @@ enum class render_type {
 */
 
 typedef struct {
-    ivec2 offset;
+    // add more advanced stuff as time goes on
+
     buf2<rgb> pixels;
 }default_rgb;
 
-typedef struct {
-    render_type type;
+typedef struct render_obj{
+    render_type type = render_type::NULL_RGB;
     void *data;
+
+    void init(render_type t) {
+        type = t;
+
+        switch(t) {
+            case render_type::DEFAULT_RGB:
+                data = new default_rgb;
+            break;
+        }
+    }
+
+    ~render_obj() {
+        switch(type) {
+            case render_type::DEFAULT_RGB: {
+                default_rgb *data_ptr = static_cast<default_rgb*>(data);
+
+                delete data_ptr;
+            }
+
+            break;
+        }
+    }
+
 }render_obj;
 
 class pipeline_renderer {
@@ -61,8 +78,12 @@ private:
     u32 window_height = 900;
 
 public:
-    pipeline_renderer() {
+    void init(u32 w, u32 h){
+        window_width =  w;
+        window_height = h;
+
         tile_size = window_width / width;
+        std::cout << "tile_size: " << tile_size << "\n";
     
 
         if (SDL_Init(SDL_INIT_VIDEO) < 0) {
@@ -111,14 +132,15 @@ public:
         SDL_RenderPresent(renderer);
     }
 
-    void render(render_obj *obj) {
+    void render(render_obj *obj, vec2 offset) {
         switch(obj->type) {
             case render_type::DEFAULT_RGB:
-                render_default_rgb(obj->data);
+                render_default_rgb(obj->data, offset);
 
                 break;
 
             default:
+                std::cout << "render_obj.type not defined\n";
                 return ;
         }
     }
@@ -146,12 +168,16 @@ public:
         }
     }
 
-    void render_default_rgb(void *src) {
+    void render_default_rgb(void *src, vec2 offset) {
         default_rgb *data = reinterpret_cast<default_rgb*>(src);
         
         for (int x = 0; x < data->pixels.width; x++) {
             for (int y = 0; y < data->pixels.height; y++) {
+                rgb clr = data->pixels[x][y];
 
+                draw_pixel(
+                    x + offset.x, y + offset.y,
+                    clr.r, clr.g, clr.b);
             }
         }
 
@@ -172,6 +198,3 @@ public:
         SDL_RenderFillRect(renderer, &rect);
     }
 };
-
-
-#endif

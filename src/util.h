@@ -1,5 +1,4 @@
-#ifndef PLATFORMER_UTIL
-#define PLATFORMER_UTIL
+#pragma once
 
 #include <iostream>
 #include <vector>
@@ -8,6 +7,7 @@
 #include <map>
 #include <list>
 #include <unordered_map>
+#include <memory>
 
 #include <SDL2/SDL.h>
 
@@ -67,13 +67,45 @@ struct vector2 {
         y += other.y;
     }
 
-    inline T operator*(vector2 op) {
-        return T(this->x * op, this->y * op);
+    bool operator==(const vector2& other) const {
+        return (x == other.x && y == other.y);
+    }
+
+    vector2<T> operator*(f32 other) {
+        return vector2<T>{other * x, other * y};
+    }
+
+    vector2<T> operator*(vector2 other) {
+        return vector2<T>{other.x * x, other.y * y};
+    }
+
+    vector2<T> operator+(vector2 other) {
+        return vector2<T>{other.x + x, other.y + y};
+    }
+    
+    vector2<T> operator-(vector2 other) {
+        return vector2<T>{x - other.x, y - other.y};
     }
 };
 
 using vec2  = vector2<f32>;
 using ivec2 = vector2<i32>;
+
+// Define a custom hash function for vec2
+namespace std {
+    template <>
+    struct hash<vec2> {
+        std::size_t operator()(const vec2& v) const {
+            // Use a simple combination of x and y for the hash value
+            std::size_t h1 = std::hash<float>{}(v.x);
+            std::size_t h2 = std::hash<float>{}(v.y);
+            
+            // Combine the two hash values to get a single hash
+            return h1 ^ (h2 << 1); // XOR with left shift
+        }
+    };
+}
+
 
 
 // basic rectangular hitbox
@@ -185,7 +217,15 @@ public:
     data(w * h),
     width(w),
     height(h)
-    {    
+    {}
+
+    void reserve(u32 w, u32 h) {
+        if (width == 0 && height == 0) { // not preallocated yet
+            data.reserve(w * h);
+            
+            width =  w;
+            height = h;   
+        }
     }
 
     // get direct data pointer
@@ -281,6 +321,3 @@ std::vector<std::string> l_read(std::string path) {
     file.close();
     return buffer;
 }
-
-
-#endif

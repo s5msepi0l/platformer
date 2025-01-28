@@ -60,8 +60,18 @@ namespace world {
         return false;
     }
 
+    typedef struct {
+        std::vector<ivec2> verticies;
+    }mesh;
+
+
     bool box_collision_mesh(Transform transform, mesh pts) {
-        
+        Transform edges[4]{
+            transform.pos,
+            transform.pos 
+        };
+
+        return false;
     }
 
     // fuck templates
@@ -69,7 +79,7 @@ namespace world {
         RECTANGLE = 1,  // Transform
         MESH = 2        // slopes, circles and stuff
     };
-
+    
     typedef struct surface_box{
         mesh_type type;
         void *data;
@@ -93,14 +103,15 @@ namespace world {
 
     }surface_box;
 
-    typedef struct {
-        std::vector<ivec2> verticies;
-    }mesh;
+    enum class surface_type {
+        STATIC,
+        DYNAMIC
+    };
 
     class surface {
     public:
-        std::vector<surface_box> hitmesh;
-        
+        surface_type type;
+        surface_box hitmesh;
         render_obj texture;
     };
 
@@ -129,26 +140,32 @@ namespace world {
                 loaded_level = &levels[index];
             }
 
-            bool check_collision(Transform transform) {
+            /* In the future I should probably ad some kind of system so that
+             * the engine doesn't check collisions between every surface on the level
+             * whether it's even on the screen or not */
+            surface *check_collision(Transform transform) {
                 for (u32 i = 0; i<loaded_level->surfaces.size(); i++) {
-                    for (u32 j = 0; j<loaded_level->surfaces[i].hitmesh.size(); j++) {
+                    switch(loaded_level->surfaces[i].hitmesh.type) {
+                        case mesh_type::RECTANGLE: {
+                            Transform *rect = loaded_level->surfaces[i].hitmesh.get<Transform>();
+                                if AABB(rect->pos.x, rect->pos.y, rect->size.x, rect->size.y,
+                                    transform.pos.x, transform.pos.y, transform.size.x, transform.size.y) {                                
+                                    return &loaded_level->surfaces[i];
+                                }
 
-                        switch(loaded_level->surfaces[i].hitmesh[j].type) {
-                            case mesh_type::RECTANGLE:
-                                Transform *rect = loaded_level->surfaces[i].hitmesh[j].get<Transform>();
-
-                                return AABB( rect->pos.x, rect->pos.y, rect->size.x, rect->size.y, transform.pos.x, transform.pos.y, transform.size.x, transform.size.y);
-
-                                break;
+                            break;
+                        }
 
                             case mesh_type::MESH:
+                            /* I'll probabably fully implement this at some point
+                             * but I'm gonna focus on getting things up and running first w graphics and stuff
                                 if (winding_num(transform.pos, loaded_level->surfaces)) {
 
                                 }
+                            */
+
 
                                 break;
-                        }
-
                     }
                 }
             

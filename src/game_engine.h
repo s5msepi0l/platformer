@@ -1,7 +1,7 @@
-#ifndef PLATFORMER_GAME_ENGINE
-#define PLATFORMER_GAME_ENGINE
+#pragma once
 
 #include "renderer.h"
+#include "world.h"
 #include "util.h"
 #include <map>
 
@@ -12,7 +12,7 @@ namespace game_engine {
 
     class component {
         public:
-            //used to change the objects position and whatnot
+            //used to interact w the objects position and whatnot
             entity *self;
 
             virtual void init() = 0;
@@ -25,14 +25,15 @@ namespace game_engine {
 
         class entity {
         public:
-            std::vector<component *> comps;
+            std::vector<std::unique_ptr<component>> comps;
 
 
             /* Will need some refactoring if i want to get some animations up and running */
-            
+            render_obj graphics;            
 
             Transform transform;
             
+            bool collidable;
             bool colliding = false;
             entity *colliding_partner = nullptr;
 
@@ -42,15 +43,9 @@ namespace game_engine {
             std::string get_name() const { return this->name; }
             void set_name(std::string new_name) { this->name = new_name; }
 
-            bool load_model(std::string path) {
-                
-                return true;
-            }
-
-            void add_component(component *comp) {
+            void add_component(std::unique_ptr<component> comp) {
                 comp->self = this;
-                comp->init();
-                comps.push_back(comp);
+                comps.push_back(std::move(comp));
             }
 
             inline f32 distance_to(entity &other) {
@@ -64,7 +59,6 @@ namespace game_engine {
             }
 
             void set_collision(bool state, entity *other) {
-                std::cout << "SET_COLLISION\n";
                 if (this->colliding && !state) {
                     for (i32 i = 0; i<comps.size(); i++) {
                         comps[i]->collision_exit(this->colliding_partner);
@@ -99,8 +93,78 @@ namespace game_engine {
             }
     };
 
+    /* Get entities nearby, really only used to get collision partners.
+     * if in the future there's some performance issues i feel like there
+     * could be done some more optimizations relatively easy*/
+    class collision_grid {
+        public:
+            collision_grid(f32 cell_size):cellsize(cell_size) {}
+
+            void clear() {
+                grid.clear();
+            }
+
+            void add(entity *src) {
+                // calculate the grid cells that the entity occupies
+                i32 x_start = static_cast<i32>(std::floor(src->transform.pos.x / cellsize));
+                i32 y_start = static_cast<i32>(std::floor(src->transform.pos.y / cellsize));
+
+                i32 x_end = static_cast<i32>(std::floor((src->transform.pos.x + src->transform.size.x) / cellsize));
+                i32 y_end = static_cast<i32>(std::floor((src->transform.pos.y + src->transform.size.y) / cellsize));
+
+                // add the entity to all the cells it overlaps
+                for (i32 x = x_start; x <= x_end; ++x) {
+                    for (i32 y = y_start; y <= y_end; ++y) {
+                        grid[{(f32)x, (f32)y}].push_back(src);
+                    }
+                }
+            }
+
+            std::vector<entity*> get_neighbors(entity *src) {
+                std::vector<entity *> buffer;
+
+                u32 x_start = static_cast<u32>(std::floor(src->transform.pos.x / cellsize));
+                u32 y_start = static_cast<u32>(std::floor(src->transform.pos.y / cellsize));
+
+                u32 x_end = static_cast<int>(std::floor((src->transform.pos.x + src->transform.size.x) / cellsize));
+                u32 y_end = static_cast<int>(std::floor((src->transform.pos.y + src->transform.size.y) / cellsize));
+
+                for (u32 x = x_start; x <= x_end; ++x) {
+                    for (u32 y = y_start; y <= y_end; ++y) {
+                        vec2 cell = {(f32)x, (f32)y};
+                        
+                        if (grid.find(cell) != grid.end()) {
+                            for (u32 i = 0; i<grid[cell].size(); i++) {
+                                buffer.push_back(grid[cell][i]);
+                            }
+                        }
+                    
+                    }
+                }
+
+                return buffer;
+            }
+            
+        private:
+            f32 cellsize;
+            std::unordered_map<vec2, std::vector<entity*> > grid;
+
+            vec2 get_cell(const vec2 pos) {
+                return {
+                    std::floor(pos.x / cellsize),
+                    std::floor(pos.y / cellsize),
+                };
+            }
+    };
+
     class ecs {
         public:
+            void tick() {
+                for (u32 i = 0; i<dynamic_entities.size(); i++) {
+                    dynamic_entities[i]->tick_comps();
+                }
+            }
+
             //true if succesfull
             bool add_entity(std::string name, entity *obj) {
                 if (dynamic_entities_map.find(name) == dynamic_entities_map.end()) {
@@ -156,13 +220,11 @@ namespace game_engine {
             /* does NOT check collision with other objects
             Static objects update script is executed after
             live objects but are much less computationally expensive */
-            i32 object_count() { return dynamic_entities.size() + static_entities.size(); }    
+            i32 object_count() { return dynamic_entities.size();}    
 
         private:
             std::unordered_map<std::string, entity*> static_entities_map;
             std::vector<entity*> static_entities;
-
-
             
             std::unordered_map<std::string, entity*> dynamic_entities_map;
             std::vector<entity*> dynamic_entities;
@@ -212,19 +274,18 @@ namespace game_engine {
         }
     };
 
-    //if size == 0 collision is just not checked
-    //more or less just a template for storing game data
-
-    class engine {
+    namespace state {
+        class State {
         public:
-            ecs entities;
-            pipeline_renderer renderer;
-            frametime_manager frametime;
+            std::unique_ptr<world::world> scene;
+            std::unique_ptr<ecs> entities;
+            std::unique_ptr<pipeline_renderer> renderer;
+        
+            std::unique_ptr<frametime_manager> frametime;
+            std::unique_ptr<Deltatime> delta_time;
+            std::unique_ptr<keyboard_input> input;
 
-            Deltatime delta_time;
             f64 deltatime;
-
-            keyboard_input input;
 
             bool running = true;
 
@@ -233,70 +294,116 @@ namespace game_engine {
                 f32 ticks;
             }tick;
 
-            u32 framerate;
-            u32 tickrate;
+            struct {
+                u32 width;
+                u32 height;
 
+                u32 framerate;
+                u32 tickrate;
+            }cfg;
+
+            State() {
+                entities =   std::make_unique<ecs>();
+                renderer =   std::make_unique<pipeline_renderer>();
+                frametime =  std::make_unique<frametime_manager>();
+
+                delta_time = std::make_unique<Deltatime>();
+                input =      std::make_unique<keyboard_input>();
+                scene =      std::make_unique<world::world>();
+            }
+        };
+
+        State state;
+    };
+
+    //if size == 0 collision is just not checked
+    //more or less just a template for storing game data
+    class engine {
+        public:
             engine(std::string name, u32 width, u32 height, u32 frame_rate, u32 tickrate){
-                tick.tick_inc = tickrate / framerate;
+                
+                state::state.cfg.tickrate = tickrate;
+                state::state.cfg.framerate = frame_rate;
+
+                state::state.frametime->set_frametime(frame_rate);
+
+
+                state::state.tick.tick_inc = (f32)tickrate / state::state.cfg.framerate;
+                std::cout << "tick_inc: " << tickrate / state::state.cfg.framerate << "\n";
+
+                state::state.cfg.width =  width;
+                state::state.cfg.height = height;
+                state::state.renderer->init(width, height);
             }
 
             ~engine() { }
 
         public:
+
+            void render_entities() {
+                std::vector<entity*> entities = state::state.entities->get_entities();
+
+                for (i32 i = 0; i < entities.size(); i++) {
+                    state::state.renderer->render(
+                        &entities[i]->graphics, 
+                        entities[i]->transform.pos
+                    );
+                }
+            }
+
             // return true if succesfull
             bool add_entity(std::string name, entity *object) {
-                return entities.add_entity(name, object);
+                return state::state.entities->add_entity(name, object);
             }
 
             bool add_static_entity(std::string name, entity *object) {
-                return entities.add_static_entity(name, object);
+                return state::state.entities->add_static_entity(name, object);
             }
 
             //return exit code, normal: 0, general error: -1
             u8 run() {
-                renderer.start_frame();
-                frametime.set_start();
+                state::state.renderer->start_frame();
+                state::state.frametime->set_start();
 
-                input.poll();
-                if (input.quit) running = false;
+                state::state.deltatime = state::state.delta_time->update() / state::state.tick.tick_inc;
 
-                deltatime = delta_time.update();
 
-                tick.ticks += tick.tick_inc;
-                if (tick.ticks >= 1.0) {
-                    tick_entities();
-
-                    tick.ticks = 0.0;
+                state::state.input->poll();
+                if (state::state.input->quit){
+                    state::state.running = false;
                 }
 
-                renderer.render_frame();
-                frametime.set_end();
+                state::state.tick.ticks += state::state.tick.tick_inc;
+                if (state::state.tick.ticks >= 1.0) {
+                    state::state.entities->tick();
+
+                    state::state.tick.ticks = 0.0;
+                }
+
+                collision_detection();
+
+                render_entities();
+
+                state::state.renderer->render_frame();
+                state::state.frametime->set_end();
+
+                return 0;
             }
 
         private:
-            void tick_entities() {
-                std::vector<entity*> entity_arr = entities.get_entities();
-                for (u32 i = 0; i<entity_arr.size(); i++) {
-                    entity_arr[i]->tick_comps();
-                }
-            }
-
-
-
-            //kinda "hackey" and only allows for retangular hitboxes
             void collision_detection() {
-                std::cout << "collision_detection\n";
                 
-                std::vector<entity*> live_objects = entities.get_entities();
-                std::vector<entity*> static_objects = entities.get_entities();
+                std::vector<entity*> live_objects = state::state.entities->get_entities();
+                
+                std::vector<entity*> static_objects = state::state.entities->get_entities();
 
+                /* Check collisions between different entities */
                 for (auto &dyn_entity: live_objects) {
                     for (auto &static_entity: static_objects) {
                         
                         Transform p1 = dyn_entity->transform;
                         Transform p2 = static_entity->transform;
 
-                        
                         if (AABB(
                             p1.pos.x, p1.pos.y, p1.size.x, p1.size.y,
                             p2.pos.x, p2.pos.y, p2.size.x, p2.size.y
@@ -307,7 +414,6 @@ namespace game_engine {
                         
                         } else {
                             dyn_entity->set_collision(false, static_entity);
-                            
                         }
 
                     }
@@ -315,5 +421,3 @@ namespace game_engine {
             } 
     };
 }
-
-#endif
