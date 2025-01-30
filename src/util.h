@@ -240,6 +240,21 @@ public:
         return &data[index * width];
     }
 
+    T *get(u32 x, u32 y){
+        if (x >= width || y >= height) {
+            throw std::out_of_range("index out of bounds");
+        }
+        return &data[y * width + x];
+    }
+
+    void set(u32 x, u32 y, const T& value) {
+        if (x >= width || y >= height) {
+            throw std::out_of_range("index out of bounds");
+        }
+
+        data[y * width + x] = value;
+    }
+
 };
 
 template <typename key_type, typename value_type>

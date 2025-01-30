@@ -50,6 +50,10 @@ typedef struct render_obj{
         }
     }
 
+    default_rgb *get_def() {
+        return static_cast<default_rgb*>(data);
+    }
+
     ~render_obj() {
         switch(type) {
             case render_type::DEFAULT_RGB: {
@@ -187,6 +191,14 @@ public:
         SDL_Rect rect{x * tile_size, y * tile_size, tile_size, tile_size};
 
         SDL_SetRenderDrawColor(renderer, r, g, b, 255);
+        SDL_RenderFillRect(renderer, &rect);
+        
+    }
+
+    void draw_pixel(i32 x, i32 y, rgb clr) {
+        SDL_Rect rect{x * tile_size, y * tile_size, tile_size, tile_size};
+
+        SDL_SetRenderDrawColor(renderer, clr.r, clr.g, clr.b, 255);
         SDL_RenderFillRect(renderer, &rect);
         
     }

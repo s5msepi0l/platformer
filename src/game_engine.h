@@ -277,7 +277,9 @@ namespace game_engine {
     namespace state {
         class State {
         public:
-            std::unique_ptr<world::world> scene;
+            std::unique_ptr<Scene_manager> scene_manager;
+            Scene* scene;
+
             std::unique_ptr<ecs> entities;
             std::unique_ptr<pipeline_renderer> renderer;
         
@@ -303,13 +305,14 @@ namespace game_engine {
             }cfg;
 
             State() {
-                entities =   std::make_unique<ecs>();
-                renderer =   std::make_unique<pipeline_renderer>();
-                frametime =  std::make_unique<frametime_manager>();
+                entities =      std::make_unique<ecs>();
+                renderer =      std::make_unique<pipeline_renderer>();
+                frametime =     std::make_unique<frametime_manager>();
 
-                delta_time = std::make_unique<Deltatime>();
-                input =      std::make_unique<keyboard_input>();
-                scene =      std::make_unique<world::world>();
+                delta_time =    std::make_unique<Deltatime>();
+                input =         std::make_unique<keyboard_input>();
+
+                scene_manager = std::make_unique<Scene_manager>();
             }
         };
 
@@ -351,6 +354,21 @@ namespace game_engine {
                 }
             }
 
+            void render_scene() {
+                state::state.scene->render(state::state.renderer.get());
+            }
+
+            /* sometime maybe add some kind of level loading system via storage,
+             * for now though it's just gonna load a static test level till i get
+             * things working */
+            bool load_level(std::string path, std::unique_ptr<Scene> scene) {
+                state::state.scene_manager->add(path, std::move(scene));
+
+                state::state.scene = state::state.scene_manager->get(path);
+
+                return true;
+            }
+
             // return true if succesfull
             bool add_entity(std::string name, entity *object) {
                 return state::state.entities->add_entity(name, object);
@@ -362,6 +380,7 @@ namespace game_engine {
 
             //return exit code, normal: 0, general error: -1
             u8 run() {
+                std::cout << "run()\n";
                 state::state.renderer->start_frame();
                 state::state.frametime->set_start();
 
@@ -383,6 +402,8 @@ namespace game_engine {
                 collision_detection();
 
                 render_entities();
+
+                render_scene();
 
                 state::state.renderer->render_frame();
                 state::state.frametime->set_end();
