@@ -14,6 +14,43 @@ class Texture {
     public:
         std::shared_ptr<buf2<rgb>> data;
 
+    void fill_rainbow(u32 w, u32 h) {
+        data->reserve(50, 50);
+        u32 centerX = w / 2;  
+        u32 centerY = h;    
+        u32 radius = w / 2;   
+
+        rgb rainbow[] = {
+            {255, 0, 0},      // Red
+            {255, 165, 0},    // Orange
+            {255, 255, 0},    // Yellow
+            {0, 255, 0},      // Green
+            {0, 0, 255},      // Blue
+            {75, 0, 130},     // Indigo
+            {148, 0, 211}     // Violet
+        };
+
+        u32 bands = 7;
+        u32 thickness = radius / bands;
+
+        for (u32 px = 0; px < w; ++px) {
+            for (u32 py = 0; py < h; ++py) {  
+                f64 dist = sqrt((px - centerX) * (px - centerX) + (py - centerY) * (py - centerY));
+
+                for (u32 i = 0; i < bands; i++) {
+                    u32 in_radius = radius - (i + 1) * thickness;
+                    u32 out_radius = radius - i * thickness;
+
+                    if (dist >= in_radius && dist < out_radius) {
+                        *data->get(px, py) = rainbow[i];  // Assign color directly
+                        break;
+                    }
+                }
+            }
+        }
+    }
+    
+
     void render(
         pipeline_renderer *renderer,
         u32 x_offset, u32 y_offset

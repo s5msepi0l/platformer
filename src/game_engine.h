@@ -29,7 +29,7 @@ namespace game_engine {
 
 
             /* Will need some refactoring if i want to get some animations up and running */
-            render_obj graphics;            
+            Texture graphics;            
 
             Transform transform;
             
@@ -365,6 +365,18 @@ namespace game_engine {
                 state::state.scene_manager->add(path, std::move(scene));
 
                 state::state.scene = state::state.scene_manager->get(path);
+
+                Texture texture;
+                texture.fill_rainbow(50, 50);
+
+                state::state.scene->texture_manager.set(texture, 0);
+
+                Surface surface;
+                surface.texture = 0;
+                surface.pos = {50,50};
+                surface.size = {50, 50};
+
+                state::state.scene->surfaces.push_back(surface);
 
                 return true;
             }

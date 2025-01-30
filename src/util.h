@@ -221,10 +221,15 @@ public:
 
     void reserve(u32 w, u32 h) {
         if (width == 0 && height == 0) { // not preallocated yet
-            data.reserve(w * h);
+        std::cout << "buffer not preallocated\n" <<
+        "w: " << w << ", h: " << h << "\n";
+            data.resize(w * h);
             
             width =  w;
             height = h;   
+        } else {        
+            std::cout << "buffer already preallocated\n" <<
+        "w: " << w << ", h: " << h << "\n";
         }
     }
 
