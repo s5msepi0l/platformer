@@ -4,49 +4,12 @@
 #include "util.h"
 
 typedef struct {
-    u32 texture;
-
     vec2 pos;
     vec2 size;
+
+    i32 z_index;
 }Surface;
 
-class Texture {
-    public:
-        std::shared_ptr<buf2<rgb>> data;
-
-    void render(
-        pipeline_renderer *renderer,
-        u32 x_offset, u32 y_offset
-    ) {
-        for (u32 x = 0; x < data->width; x++) {
-            for (u32 y = 0; y < data->height; y++) {
-                
-                rgb *color = data->get(x, y);
-
-                renderer->draw_pixel(
-                    x_offset + x,
-                    y_offset + y,
-                    *color
-                );
-
-            }
-        }
-    }
-};
-
-class Texture_manager {
-    private:
-        std::unordered_map<u32, Texture> textures;
-
-    public:
-        Texture get(u32 index) {
-            return textures[index];
-        }
-
-        void set(Texture texture, u32 index) {
-            textures[index] = texture;
-        }
-};
 
 class Scene {
 public:
@@ -56,15 +19,25 @@ public:
 
 public:
     /*Add lights, and other stuff here */
-    Texture_manager texture_manager;
-    std::vector<Surface> surfaces;
 
+    std::unordered_map<u32, std::vector<Surface>>  surfaces;
+    std::vector<u32> texture_id;
+
+    void add_surface(Surface surface, u32 texture) {
+        if (surfaces.find(texture) == surfaces.end()) {
+            texture_id.push_back(texture);
+        }
+
+        surfaces[texture].push_back(surface);
+    }
+
+    /* doesn't render anything by itself it just pushes the current surfaces to the
+    renderers z-buffer
+    */
     void render(pipeline_renderer *renderer) {
-        for (u32 i = 0; i < surfaces.size(); i++) {
-            Texture texture = texture_manager.get(surfaces[i].texture);
-            texture.render(
-                renderer,surfaces[i].pos.x, surfaces[i].pos.y
-            );
+        for (u32 i = 0; i < texture_id.size(); i++) {
+            render_object object;
+
         }
     }
 };

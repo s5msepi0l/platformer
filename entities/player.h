@@ -30,33 +30,13 @@ class character_controller: public game_engine::component {
 
 class player : public game_engine::entity {
 	public:
-		default_rgb *model;
-		
 		vec2 player_size = {5, 5};
 
 		player() {
 			add_component(std::move(std::make_unique<character_controller>()));
 			collidable = true;
 
-			graphics.init(render_type::DEFAULT_RGB);
-			
 			transform.size = player_size;
-
-			// remove this later, im just testing if this works 
-			model = static_cast<default_rgb*>(graphics.data);
-			model->pixels.reserve((u32)player_size.x, (u32)player_size.y);
-
-			//load the character with a basic color
-			for (u32 x = 0; x < player_size.x; x++){
-				for (u32 y = 0; y < player_size.y; y++) {
-					model->pixels[x][y] = {
-						u8(255 / (x + 1)),
-						u8(255 / (y + 1)),
-						u8(255 / (x + 1)),
-					};
-				}
-			}
-
 
 		}
 };

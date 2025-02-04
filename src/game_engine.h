@@ -10,6 +10,122 @@
 namespace game_engine {
     class entity;
 
+    class Frame {
+    public:
+        u32 width;
+        u32 height;
+
+        buf2<rgba> data;
+
+        bool load(std::string path) {
+            data = load_image(path);
+            return data.is_empty();
+        }
+    };
+
+    class Animation {
+    public:
+        std::vector<Frame> frames;
+        u32 frame_count;
+
+        u32 framerate;
+        u32 frame_index;
+
+        f64 elapsed_time;
+
+        buf2<rgba> get_current_frame() {return frames[frame_index].data;}
+
+        void init(size_t n, u32 fps) {
+            frames.reserve(n);
+            framerate = fps;
+
+        }
+
+        void load_frames(const std::vector<std::string> &path, u32 w, u32 h) {
+            for (u32 i = 0; i < path.size(); i++) {
+                load(path[i], w, h);
+            }
+        }
+
+        void load(std::string path, u32 w, u32 h) {
+            Frame frame;
+            frame.load(path);
+
+            if (frame.data.width != w && frame.data.height != h) {
+                buf2<rgba> img = bilinear_resize(frame.data, w, h);
+                frame.data = img;
+            }
+
+            frames.push_back(frame);
+        }
+
+        void tick(f64 deltatime) {
+            elapsed_time += deltatime;
+
+            if ( elapsed_time >= 1000.0 / framerate) {
+                /* cycle animation */
+                
+                if (frame_index == frame_count) frame_index = 0;
+                else frame_index++;
+
+                elapsed_time -= 1000.0 / framerate;
+            }
+        }
+
+    };
+
+    /* Simular to the world surfaces uses a texture_id to better batch render
+    certain repeating textures in the world, the same is done for animations,
+    as there might be alot of them for say particels, player movement and so on, which is just
+    a fancy way of changing the texture a few times a second, lowk just might remove ts if it get to annoying to fix
+    */
+    class Animation_manager{
+    public:
+        std::unordered_map<u32, std::shared_ptr<Animation>> animations;
+
+        std::shared_ptr<Animation> get(u32 index) {
+            return animations[index];
+        }
+
+        void set(u32 index, Animation animation) {
+            animations[index] = std::make_shared<Animation>(animation);
+        }
+        
+    };
+
+    class Model {
+        public:
+            Transform *src_transform;
+            
+
+            u32 animation_id;
+            std::shared_ptr<Animation> animation;
+
+            buf2<rgba> get_current_frame() {
+                return animation->get_current_frame();
+            }
+
+            /* the path should be a directory of images "dir/x.png"
+            also remember to add a / after the dir name */
+            bool init_animation(std::string path, std::string filetype, u32 frame_count, u32 client_fps) {
+                animation = std::make_unique<Animation>();
+                animation->init(frame_count, client_fps);
+
+                std::vector<std::string> dir(frame_count);
+                for (u32 i = 0; i < frame_count; i++) {
+                    std::stringstream ss;
+                    ss << path << i << filetype;
+
+                    dir.push_back(ss.str());
+                }
+            }
+
+            void animation_tick(f64 deltatime) {
+                animation->tick(deltatime);
+
+            }
+    };
+
     class component {
         public:
             //used to interact w the objects position and whatnot
@@ -23,13 +139,12 @@ namespace game_engine {
             virtual void collision_exit(entity *other) = 0;
     };
 
-        class entity {
+    class entity {
         public:
             std::vector<std::unique_ptr<component>> comps;
 
-
             /* Will need some refactoring if i want to get some animations up and running */
-            render_obj graphics;            
+
 
             Transform transform;
             
@@ -282,6 +397,9 @@ namespace game_engine {
 
             std::unique_ptr<ecs> entities;
             std::unique_ptr<pipeline_renderer> renderer;
+
+            std::unique_ptr<Texture_manager> texture_manager;
+            std::unique_ptr<Animatin_manager> animation_manager;
         
             std::unique_ptr<frametime_manager> frametime;
             std::unique_ptr<Deltatime> delta_time;
@@ -347,14 +465,11 @@ namespace game_engine {
                 std::vector<entity*> entities = state::state.entities->get_entities();
 
                 for (i32 i = 0; i < entities.size(); i++) {
-                    state::state.renderer->render(
-                        &entities[i]->graphics, 
-                        entities[i]->transform.pos
-                    );
                 }
             }
 
             void render_scene() {
+                state::state.scene->surfaces.size();
                 state::state.scene->render(state::state.renderer.get());
             }
 
@@ -401,10 +516,10 @@ namespace game_engine {
 
                 collision_detection();
 
-                render_entities();
 
                 render_scene();
 
+                render_entities();
                 state::state.renderer->render_frame();
                 state::state.frametime->set_end();
 

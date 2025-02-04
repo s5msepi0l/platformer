@@ -1,18 +1,14 @@
 #pragma once
 
 #include "util.h"
+#include "game_engine.h"
+#include "texture.h"
 
 #include <vector>
 #include <ctime>
 
 #define VISABLE   1
 #define INVISIBLE 0
-
-typedef struct {
-    u8 r = 255;
-    u8 g = 255;
-    u8 b = 255;
-}rgb;
 
 // mainly used for storing pixel offset but can be used for most other applications as long as the 
 // required prescision > 65k
@@ -21,52 +17,32 @@ typedef struct {
     u16 y;
 } px_offset;
 
-enum class render_type {
-    DEFAULT_RGB = 1,
-    NULL_RGB = 2 // empty / no render type selected
+
+//object thats passed to the zbuffer 
+class render_object {
+public:
+    uvec16 pos;
+    uvec16 size;
 };
 
-/* render object that's passed to the renderer, add different types of rendering outputs
-    like static images or dynamically changing like particles for instance
-*/
-
 typedef struct {
-    // add more advanced stuff as time goes on
+    std::unordered_map<u32, std::vector<render_object>> textures;
+    std::vector<u32> texture_id;
 
-    buf2<rgb> pixels;
-}default_rgb;
-
-typedef struct render_obj{
-    render_type type = render_type::NULL_RGB;
-    void *data;
-
-    void init(render_type t) {
-        type = t;
-
-        switch(t) {
-            case render_type::DEFAULT_RGB:
-                data = new default_rgb;
-            break;
+    void add(u32 texture, render_object object) {
+        if (textures.find(texture) == textures.end()) {
+            texture_id.push_back(texture);
         }
+
+        textures[texture].push_back(object);
     }
+}texture_map;
 
-    default_rgb *get_def() {
-        return static_cast<default_rgb*>(data);
-    }
-
-    ~render_obj() {
-        switch(type) {
-            case render_type::DEFAULT_RGB: {
-                default_rgb *data_ptr = static_cast<default_rgb*>(data);
-
-                delete data_ptr;
-            }
-
-            break;
-        }
-    }
-
-}render_obj;
+/* z buffer, uses i32 as a key*/
+typedef struct {
+    std::unordered_map<i32, texture_map> buffer;
+    std::vector<i32> levels;
+}Z_buffer;
 
 class pipeline_renderer {
 private:
@@ -80,6 +56,9 @@ private:
 
     u32 window_width  = 1600;
     u32 window_height = 900;
+
+public:
+    Z_buffer z_buffer;
 
 public:
     void init(u32 w, u32 h){
@@ -136,16 +115,16 @@ public:
         SDL_RenderPresent(renderer);
     }
 
-    void render(render_obj *obj, vec2 offset) {
-        switch(obj->type) {
-            case render_type::DEFAULT_RGB:
-                render_default_rgb(obj->data, offset);
+    void z_buffer_push(
+        render_object object,
+        i32 z_index,
+        u32 texture_id
+    ) {
+        z_buffer.buffer[z_index].add(texture_id, object);
 
-                break;
-
-            default:
-                std::cout << "render_obj.type not defined\n";
-                return ;
+        auto it = std::lower_bound(z_buffer.levels.begin(), z_buffer.levels.end(), z_index, std::greater<i32>());
+        if (it == z_buffer.levels.end() || *it != z_index) {
+            z_buffer.levels.insert(it, z_index);
         }
     }
 
@@ -172,21 +151,6 @@ public:
         }
     }
 
-    void render_default_rgb(void *src, vec2 offset) {
-        default_rgb *data = reinterpret_cast<default_rgb*>(src);
-        
-        for (int x = 0; x < data->pixels.width; x++) {
-            for (int y = 0; y < data->pixels.height; y++) {
-                rgb clr = data->pixels[x][y];
-
-                draw_pixel(
-                    x + offset.x, y + offset.y,
-                    clr.r, clr.g, clr.b);
-            }
-        }
-
-    }
-
     void draw_pixel(i32 x, i32 y, u8 r, u8 g, u8 b) {
         SDL_Rect rect{x * tile_size, y * tile_size, tile_size, tile_size};
 
@@ -195,7 +159,7 @@ public:
         
     }
 
-    void draw_pixel(i32 x, i32 y, rgb clr) {
+    void draw_pixel(i32 x, i32 y, rgba clr) {
         SDL_Rect rect{x * tile_size, y * tile_size, tile_size, tile_size};
 
         SDL_SetRenderDrawColor(renderer, clr.r, clr.g, clr.b, 255);

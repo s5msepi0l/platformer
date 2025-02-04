@@ -1,5 +1,8 @@
 #pragma once
 
+#define STB_IMAGE_IMPLEMENTATION
+#include "../lib/stb_image/stb_image.h"
+
 #include <iostream>
 #include <vector>
 #include <fstream>
@@ -8,6 +11,7 @@
 #include <list>
 #include <unordered_map>
 #include <memory>
+#include <sstream>
 
 #include <SDL2/SDL.h>
 
@@ -42,6 +46,13 @@ namespace std {
     p1y < p2y + p2h &&      \
     p1y + p1h > p2y         \
     )
+
+typedef struct {
+    u8 r = 255;
+    u8 g = 255;
+    u8 b = 255;
+    u8 a = 255;
+}rgba;
 
 //general coordinate struct
 template <typename T>
@@ -89,7 +100,12 @@ struct vector2 {
 };
 
 using vec2  = vector2<f32>;
-using ivec2 = vector2<i32>;
+
+using uvec32 = vector2<u32>;
+using svec32 = vector2<i32>;
+
+using uvec16 = vector2<u16>;
+using svec16 = vector2<i16>;
 
 // Define a custom hash function for vec2
 namespace std {
@@ -112,6 +128,8 @@ namespace std {
 typedef struct {
     vec2 pos;
     vec2 size;
+
+    i32 z_index;
 }Transform;
 
 //list of Transform(s)
@@ -212,7 +230,7 @@ public:
 
     buf2() {}
 
-    //preallocate memory to it (x * y * sizeof(rgb))
+    //preallocate memory to it (x * y * sizeof(rgba))
     buf2(u32 w, u32 h):
     data(w * h),
     width(w),
@@ -240,6 +258,7 @@ public:
         return &data[index * width];
     }
 
+    // shi i might be retarded
     T *get(u32 x, u32 y){
         if (x >= width || y >= height) {
             throw std::out_of_range("index out of bounds");
