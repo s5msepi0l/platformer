@@ -521,7 +521,7 @@ namespace game_engine {
 
                 render_entities();
                 state::state.renderer->render_frame();
-                state::state.frametime->set_end();
+                state::state.frametime->set_end(); 
 
                 return 0;
             }
