@@ -93,23 +93,40 @@ namespace game_engine {
         
     };
 
+    enum class model_type : u8 {
+        TEXTURE,
+        ANIMATION
+    };
+    
+
     class Model {
         public:
             Transform *src_transform;
-            
 
-            u32 animation_id;
-            std::shared_ptr<Animation> animation;
+            model_type type;
 
+            union {
+                u32 texture_id;
+                struct {
+                    u32 id;
+                    std::shared_ptr<Animation> ptr;
+                }animation;
+            };
+
+            Model(model_type t) {
+                type = t;
+            }
+
+            //using any of these methods assumes that the type is ANIMATION
             buf2<rgba> get_current_frame() {
-                return animation->get_current_frame();
+                return animation.ptr->get_current_frame();
             }
 
             /* the path should be a directory of images "dir/x.png"
             also remember to add a / after the dir name */
             bool init_animation(std::string path, std::string filetype, u32 frame_count, u32 client_fps) {
-                animation = std::make_unique<Animation>();
-                animation->init(frame_count, client_fps);
+                animation.ptr = std::make_unique<Animation>();
+                animation.ptr->init(frame_count, client_fps);
 
                 std::vector<std::string> dir(frame_count);
                 for (u32 i = 0; i < frame_count; i++) {
@@ -121,7 +138,7 @@ namespace game_engine {
             }
 
             void animation_tick(f64 deltatime) {
-                animation->tick(deltatime);
+                animation.ptr->tick(deltatime);
 
             }
     };
@@ -141,10 +158,11 @@ namespace game_engine {
 
     class entity {
         public:
+            u64 id;
+
             std::vector<std::unique_ptr<component>> comps;
 
             /* Will need some refactoring if i want to get some animations up and running */
-
 
             Transform transform;
             
@@ -154,6 +172,7 @@ namespace game_engine {
 
         private:
             std::string name;
+
         public:
             std::string get_name() const { return this->name; }
             void set_name(std::string new_name) { this->name = new_name; }
@@ -280,6 +299,8 @@ namespace game_engine {
                 }
             }
 
+            const u64 id_idx() { return entity_id_index++; }
+
             //true if succesfull
             bool add_entity(std::string name, entity *obj) {
                 if (dynamic_entities_map.find(name) == dynamic_entities_map.end()) {
@@ -290,7 +311,7 @@ namespace game_engine {
                     }
 
                     obj->set_name(name);
-                    
+                    obj->id = id_idx();
                     
                     dynamic_entities_map[name] = obj;
                     dynamic_entities.push_back(obj);
@@ -312,8 +333,13 @@ namespace game_engine {
             bool add_static_entity(const std::string &name, entity *obj) {
                 if (static_entities_map.find(name) == static_entities_map.end()) {
                     
-                    //call constructor
-                    //obj->init();
+                    u32 n = obj->comps.size();
+                    for (u32 i = 0; i<n; i++) {
+                        obj->comps[i]->init();
+                    }
+
+                    obj->set_name(name);
+                    obj->id = id_idx();
                     
                     static_entities_map[name] = obj;
                     static_entities.push_back(obj);
@@ -343,6 +369,8 @@ namespace game_engine {
             
             std::unordered_map<std::string, entity*> dynamic_entities_map;
             std::vector<entity*> dynamic_entities;
+
+            u64 entity_id_index = 0;
     };
 
     class Deltatime {
@@ -399,7 +427,7 @@ namespace game_engine {
             std::unique_ptr<pipeline_renderer> renderer;
 
             std::unique_ptr<Texture_manager> texture_manager;
-            std::unique_ptr<Animatin_manager> animation_manager;
+            std::unique_ptr<Animation> animation_manager;
         
             std::unique_ptr<frametime_manager> frametime;
             std::unique_ptr<Deltatime> delta_time;
@@ -469,7 +497,18 @@ namespace game_engine {
             }
 
             void render_scene() {
-                state::state.scene->surfaces.size();
+                // first add scene to the z buffer;
+
+
+                for (int i = 0; i < state::state.scene->surfaces.size(); i++ ){
+                    Surface surface = state::state.scene->surfaces
+
+                    render_object object;
+                    object.pos 
+
+                    //state::state.renderer->z_buffer_push()
+                }
+
                 state::state.scene->render(state::state.renderer.get());
             }
 
@@ -517,9 +556,7 @@ namespace game_engine {
                 collision_detection();
 
 
-                render_scene();
 
-                render_entities();
                 state::state.renderer->render_frame();
                 state::state.frametime->set_end(); 
 
