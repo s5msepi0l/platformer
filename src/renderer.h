@@ -1,11 +1,13 @@
 #pragma once
 
+#include "renderer.h"
 #include "util.h"
 #include "game_engine.h"
 #include "texture.h"
 
 #include <vector>
 #include <ctime>
+//#include <set>
 
 #define VISABLE   1
 #define INVISIBLE 0
@@ -41,7 +43,8 @@ typedef struct {
 /* z buffer, uses i32 as a key*/
 typedef struct {
     std::unordered_map<i32, texture_map> buffer;
-    std::vector<i32> levels;
+    std::vector<i32> levels; // use std::set instead of vector 
+    
 }Z_buffer;
 
 class pipeline_renderer {
@@ -125,6 +128,44 @@ public:
         auto it = std::lower_bound(z_buffer.levels.begin(), z_buffer.levels.end(), z_index, std::greater<i32>());
         if (it == z_buffer.levels.end() || *it != z_index) {
             z_buffer.levels.insert(it, z_index);
+        }
+    }
+
+    void z_buffer_frame_gen(Texture_manager *texture_manager, Animation_manager *animation_manager) {
+        for (i32 z_index = 0; z_index < z_buffer.levels.size(); z_index++) {
+            for (i32 tx_index = 0; tx_index < z_buffer.buffer[z_buffer.levels[z_index]].texture_id.size(); tx_index++) {
+                for (i32 surface_index = 0; surface_index < z_buffer.buffer[z_buffer.levels[z_index]].textures[tx_index].size(); surface_index++) {
+                    render_object object = z_buffer.buffer[z_buffer.levels[z_index]].textures[tx_index][surface_index];
+
+                    Texture texture = texture_manager->get(tx_index);
+                    
+
+                    render_texture(texture, object.pos, object.size);
+                }
+
+            } 
+        }
+    }
+
+    void render_texture(Texture &texture, uvec16 offset, uvec16 size) {
+        std::shared_ptr<buf2<rgba>> data;
+
+        //automatically scale the texture, slow as hell but saves me alot of headaches, might need caching in the future
+        if (texture.data->width != size.x || texture.data->height != size.y) {
+            data = std::make_shared<buf2<rgba>>(bilinear_resize(texture.data.get(), size.x, size.y));
+        } else {
+            data = texture.data;
+        }
+
+        for (u16 x = 0; x < size.x; x++) {
+            for (u16 y = 0; y < size.y; y++) {
+                draw_pixel(
+                    x + offset.x,
+                    y + offset.y,
+                    *data->get(x, y)
+                );
+
+            }
         }
     }
 

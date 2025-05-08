@@ -16,8 +16,8 @@ class character_controller: public game_engine::component {
 		}
 
 		void tick(){
-			vec2 move = game_engine::state::state.input->poll_axis() * speed;
-			self->transform.pos += (move * game_engine::state::state.deltatime);
+			vec2 move = self->state->input->poll_axis() * speed;
+			self->transform.pos += (move * self->state->deltatime);
 			//self->transform.pos += move;
 			//std::cout << "deltatime: " << game_engine::state::state.deltatime << "\n";
 			//std::cout << "x: " << self->transform.pos.x << "\n";

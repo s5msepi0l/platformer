@@ -11,12 +11,12 @@ int main(int argc, const char *argv[]) {
     std::cout << "pre load_level(std::string )\n";
     
     std::unique_ptr<level01> scene = std::make_unique<level01>();
-
+    scene->state = &game.state;
     game.load_level("level01", std::move(scene));
 
 
     std::cout << "here\n";
-    while (game_engine::state::state.running){
+    while (game.state.running){
         
         game.run();
     }

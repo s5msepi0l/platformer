@@ -8,140 +8,8 @@
 #define DYNAMIC_ENTITIES_LIMIT 64
 
 namespace game_engine {
+    class State;
     class entity;
-
-    class Frame {
-    public:
-        u32 width;
-        u32 height;
-
-        buf2<rgba> data;
-
-        bool load(std::string path) {
-            data = load_image(path);
-            return data.is_empty();
-        }
-    };
-
-    class Animation {
-    public:
-        std::vector<Frame> frames;
-        u32 frame_count;
-
-        u32 framerate;
-        u32 frame_index;
-
-        f64 elapsed_time;
-
-        buf2<rgba> get_current_frame() {return frames[frame_index].data;}
-
-        void init(size_t n, u32 fps) {
-            frames.reserve(n);
-            framerate = fps;
-
-        }
-
-        void load_frames(const std::vector<std::string> &path, u32 w, u32 h) {
-            for (u32 i = 0; i < path.size(); i++) {
-                load(path[i], w, h);
-            }
-        }
-
-        void load(std::string path, u32 w, u32 h) {
-            Frame frame;
-            frame.load(path);
-
-            if (frame.data.width != w && frame.data.height != h) {
-                buf2<rgba> img = bilinear_resize(frame.data, w, h);
-                frame.data = img;
-            }
-
-            frames.push_back(frame);
-        }
-
-        void tick(f64 deltatime) {
-            elapsed_time += deltatime;
-
-            if ( elapsed_time >= 1000.0 / framerate) {
-                /* cycle animation */
-                
-                if (frame_index == frame_count) frame_index = 0;
-                else frame_index++;
-
-                elapsed_time -= 1000.0 / framerate;
-            }
-        }
-
-    };
-
-    /* Simular to the world surfaces uses a texture_id to better batch render
-    certain repeating textures in the world, the same is done for animations,
-    as there might be alot of them for say particels, player movement and so on, which is just
-    a fancy way of changing the texture a few times a second, lowk just might remove ts if it get to annoying to fix
-    */
-    class Animation_manager{
-    public:
-        std::unordered_map<u32, std::shared_ptr<Animation>> animations;
-
-        std::shared_ptr<Animation> get(u32 index) {
-            return animations[index];
-        }
-
-        void set(u32 index, Animation animation) {
-            animations[index] = std::make_shared<Animation>(animation);
-        }
-        
-    };
-
-    enum class model_type : u8 {
-        TEXTURE,
-        ANIMATION
-    };
-    
-
-    class Model {
-        public:
-            Transform *src_transform;
-
-            model_type type;
-
-            union {
-                u32 texture_id;
-                struct {
-                    u32 id;
-                    std::shared_ptr<Animation> ptr;
-                }animation;
-            };
-
-            Model(model_type t) {
-                type = t;
-            }
-
-            //using any of these methods assumes that the type is ANIMATION
-            buf2<rgba> get_current_frame() {
-                return animation.ptr->get_current_frame();
-            }
-
-            /* the path should be a directory of images "dir/x.png"
-            also remember to add a / after the dir name */
-            bool init_animation(std::string path, std::string filetype, u32 frame_count, u32 client_fps) {
-                animation.ptr = std::make_unique<Animation>();
-                animation.ptr->init(frame_count, client_fps);
-
-                std::vector<std::string> dir(frame_count);
-                for (u32 i = 0; i < frame_count; i++) {
-                    std::stringstream ss;
-                    ss << path << i << filetype;
-
-                    dir.push_back(ss.str());
-                }
-            }
-
-            void animation_tick(f64 deltatime) {
-                animation.ptr->tick(deltatime);
-
-            }
-    };
 
     class component {
         public:
@@ -149,7 +17,7 @@ namespace game_engine {
             entity *self;
 
             virtual void init() = 0;
-            virtual void stop() = 0;
+            virtual void stop() = 0; 
             virtual void tick() = 0;
 
             virtual void collision_enter(entity *other) = 0;
@@ -169,6 +37,7 @@ namespace game_engine {
             bool collidable;
             bool colliding = false;
             entity *colliding_partner = nullptr;
+            State *state;
 
         private:
             std::string name;
@@ -293,6 +162,10 @@ namespace game_engine {
 
     class ecs {
         public:
+            State *state;
+
+        public:
+
             void tick() {
                 for (u32 i = 0; i<dynamic_entities.size(); i++) {
                     dynamic_entities[i]->tick_comps();
@@ -302,7 +175,7 @@ namespace game_engine {
             const u64 id_idx() { return entity_id_index++; }
 
             //true if succesfull
-            bool add_entity(std::string name, entity *obj) {
+            bool add_entity(std::string name, entity *obj, State *state) {
                 if (dynamic_entities_map.find(name) == dynamic_entities_map.end()) {
                 
                     u32 n = obj->comps.size();
@@ -312,7 +185,9 @@ namespace game_engine {
 
                     obj->set_name(name);
                     obj->id = id_idx();
-                    
+
+                    obj->state = state;
+
                     dynamic_entities_map[name] = obj;
                     dynamic_entities.push_back(obj);
                     return true;
@@ -330,7 +205,7 @@ namespace game_engine {
             }
 
             //true if succesfull
-            bool add_static_entity(const std::string &name, entity *obj) {
+            bool add_static_entity(const std::string &name, entity *obj, State *state) {
                 if (static_entities_map.find(name) == static_entities_map.end()) {
                     
                     u32 n = obj->comps.size();
@@ -341,6 +216,8 @@ namespace game_engine {
                     obj->set_name(name);
                     obj->id = id_idx();
                     
+                    obj->state = state;
+
                     static_entities_map[name] = obj;
                     static_entities.push_back(obj);
                     return true;
@@ -363,7 +240,7 @@ namespace game_engine {
             live objects but are much less computationally expensive */
             i32 object_count() { return dynamic_entities.size();}    
 
-        private:
+        private: 
             std::unordered_map<std::string, entity*> static_entities_map;
             std::vector<entity*> static_entities;
             
@@ -417,8 +294,7 @@ namespace game_engine {
         }
     };
 
-    namespace state {
-        class State {
+    class State {
         public:
             std::unique_ptr<Scene_manager> scene_manager;
             Scene* scene;
@@ -427,7 +303,7 @@ namespace game_engine {
             std::unique_ptr<pipeline_renderer> renderer;
 
             std::unique_ptr<Texture_manager> texture_manager;
-            std::unique_ptr<Animation> animation_manager;
+            std::unique_ptr<Animation_manager> animation_manager;
         
             std::unique_ptr<frametime_manager> frametime;
             std::unique_ptr<Deltatime> delta_time;
@@ -451,114 +327,109 @@ namespace game_engine {
             }cfg;
 
             State() {
-                entities =      std::make_unique<ecs>();
-                renderer =      std::make_unique<pipeline_renderer>();
-                frametime =     std::make_unique<frametime_manager>();
+                entities =         std::make_unique<ecs>();
+                renderer =         std::make_unique<pipeline_renderer>();
+                frametime =        std::make_unique<frametime_manager>();
 
-                delta_time =    std::make_unique<Deltatime>();
-                input =         std::make_unique<keyboard_input>();
+                delta_time =       std::make_unique<Deltatime>();
+                input =            std::make_unique<keyboard_input>();
 
-                scene_manager = std::make_unique<Scene_manager>();
+                scene_manager =    std::make_unique<Scene_manager>();
+                texture_manager =  std::make_unique<Texture_manager>();
+                animation_manager =std::make_unique<Animation_manager>();
             }
-        };
-
-        State state;
     };
 
     //if size == 0 collision is just not checked
     //more or less just a template for storing game data
     class engine {
         public:
-            engine(std::string name, u32 width, u32 height, u32 frame_rate, u32 tickrate){
-                
-                state::state.cfg.tickrate = tickrate;
-                state::state.cfg.framerate = frame_rate;
+            engine(std::string name, u32 width, u32 height, u32 frame_rate, u32 tickrate):
+            state(){
+                state.entities->state = &state;
 
-                state::state.frametime->set_frametime(frame_rate);
+                state.cfg.tickrate = tickrate;
+                state.cfg.framerate = frame_rate;
+
+                state.frametime->set_frametime(frame_rate);
 
 
-                state::state.tick.tick_inc = (f32)tickrate / state::state.cfg.framerate;
-                std::cout << "tick_inc: " << tickrate / state::state.cfg.framerate << "\n";
+                state.tick.tick_inc = (f32)tickrate / state.cfg.framerate;
+                std::cout << "tick_inc: " << tickrate / state.cfg.framerate << "\n";
 
-                state::state.cfg.width =  width;
-                state::state.cfg.height = height;
-                state::state.renderer->init(width, height);
+                state.cfg.width =  width;
+                state.cfg.height = height;
+                state.renderer->init(width, height);
             }
 
             ~engine() { }
 
         public:
+            State state;
 
             void render_entities() {
-                std::vector<entity*> entities = state::state.entities->get_entities();
+                std::vector<entity*> entities = state.entities->get_entities();
 
                 for (i32 i = 0; i < entities.size(); i++) {
                 }
             }
 
             void render_scene() {
-                // first add scene to the z buffer;
-
-
-                for (int i = 0; i < state::state.scene->surfaces.size(); i++ ){
-                    Surface surface = state::state.scene->surfaces
-
-                    render_object object;
-                    object.pos 
-
-                    //state::state.renderer->z_buffer_push()
-                }
-
-                state::state.scene->render(state::state.renderer.get());
+                state.scene->render(state.renderer.get());
             }
 
             /* sometime maybe add some kind of level loading system via storage,
              * for now though it's just gonna load a static test level till i get
              * things working */
             bool load_level(std::string path, std::unique_ptr<Scene> scene) {
-                state::state.scene_manager->add(path, std::move(scene));
+                state.scene_manager->add(path, std::move(scene));
 
-                state::state.scene = state::state.scene_manager->get(path);
-
+                state.scene = state.scene_manager->get(path);
+                
                 return true;
             }
 
             // return true if succesfull
             bool add_entity(std::string name, entity *object) {
-                return state::state.entities->add_entity(name, object);
+                return state.entities->add_entity(name, object, &state);
             }
 
             bool add_static_entity(std::string name, entity *object) {
-                return state::state.entities->add_static_entity(name, object);
+                return state.entities->add_static_entity(name, object, &state);
             }
 
             //return exit code, normal: 0, general error: -1
             u8 run() {
                 std::cout << "run()\n";
-                state::state.renderer->start_frame();
-                state::state.frametime->set_start();
+                state.renderer->start_frame();
+                state.frametime->set_start();
 
-                state::state.deltatime = state::state.delta_time->update() / state::state.tick.tick_inc;
+                state.deltatime = state.delta_time->update() / state.tick.tick_inc;
 
 
-                state::state.input->poll();
-                if (state::state.input->quit){
-                    state::state.running = false;
+                state.input->poll();
+                if (state.input->quit){
+                    state.running = false;
                 }
 
-                state::state.tick.ticks += state::state.tick.tick_inc;
-                if (state::state.tick.ticks >= 1.0) {
-                    state::state.entities->tick();
+                state.tick.ticks += state.tick.tick_inc;
+                if (state.tick.ticks >= 1.0) {
+                    state.entities->tick();
 
-                    state::state.tick.ticks = 0.0;
+                    state.tick.ticks = 0.0;
                 }
 
+                LOG("Check collision between entities");
                 collision_detection();
 
+                LOG("depth buffer frame generation\n");                
+                state.renderer->z_buffer_frame_gen(state.texture_manager.get(), state.animation_manager.get());
 
+                LOG("Output render");
+                state.renderer->render_frame();
 
-                state::state.renderer->render_frame();
-                state::state.frametime->set_end(); 
+                
+                state.frametime->set_end(); 
 
                 return 0;
             }
@@ -566,9 +437,9 @@ namespace game_engine {
         private:
             void collision_detection() {
                 
-                std::vector<entity*> live_objects = state::state.entities->get_entities();
+                std::vector<entity*> live_objects = state.entities->get_entities();
                 
-                std::vector<entity*> static_objects = state::state.entities->get_entities();
+                std::vector<entity*> static_objects = state.entities->get_entities();
 
                 /* Check collisions between different entities */
                 for (auto &dyn_entity: live_objects) {

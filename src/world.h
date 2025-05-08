@@ -18,6 +18,8 @@ public:
     virtual void stop()   = 0;
 
 public:
+
+
     /*Add lights, and other stuff here */
 
     std::unordered_map<u32, std::vector<Surface>>  surfaces;
@@ -36,8 +38,16 @@ public:
     */
     void render(pipeline_renderer *renderer) {
         for (u32 i = 0; i < texture_id.size(); i++) {
-            render_object object;
+            for (u32 j = 0; j < surfaces[texture_id[i]].size(); j++) {
+                Surface surface = surfaces[i][j];
 
+                render_object object;
+
+                object.pos = {surface.pos.x, surface.pos.y};
+                object.size = {surface.size.x, surface.pos.y};
+
+                renderer->z_buffer_push(object, surface.z_index, texture_id[i]);
+            }
         }
     }
 };

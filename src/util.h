@@ -26,6 +26,20 @@ namespace std {
     typedef basic_string<unsigned char> ustring;
 }
 
+#define LOG(...) log(__VA_ARGS__)
+
+template<typename T>
+void log(T arg) {
+    std::cout << arg << std::endl;
+}
+
+template<typename T, typename... Args>
+void log(T first, Args... args) {
+    std::cout << first << " ";
+    log(args...);
+}
+
+
 //compiler doesn't really like when i try to use a u8 as a boolean so im just gonna use a regular bool 
 #define f32 float
 #define f64 double 
