@@ -20,6 +20,7 @@ int main(int argc, const char *argv[]) {
     while (game.state.running){
         
         game.run();
+        LOG("FPS: ", game.state.frametime->get_fps(), "\n");
     }
 
     return 0;

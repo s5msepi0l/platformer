@@ -4,7 +4,130 @@
 #include "renderer.h"
 
 buf2<rgba> load_image(std::string path);
-buf2<rgba> bilinear_resize(buf2<rgba> *input, u32 new_w, u32 new_h);
+
+buf2<rgba> load_image(std::string path) {
+    buf2<rgba> buffer(0, 0);
+
+    i32 w, h, channels;
+    u8 *img = stbi_load(path.c_str(), &w, &h, &channels, 0);
+    if (img) {
+        buffer.reserve(w, h);
+        switch(channels) {
+            case 3:                
+                for (i32 x = 0; x < w; x++) {
+                    for (i32 y = 0; y < h; y++) {
+                        i32 i = (y * w * x) * channels;
+
+                        u8 r = img[i];
+                        u8 g = img[i + 1];
+                        u8 b = img[i + 2];
+                
+                        buffer.set(x, y, {r, g, b, 255});                           
+                    }
+                }
+
+            case 4:
+                for (i32 x = 0; x < w; x++) {
+                    for (i32 y = 0; y < h; y++) {
+                        i32 i = (y * w * x) * channels;
+
+                        u8 r = img[i];
+                        u8 g = img[i + 1];
+                        u8 b = img[i + 2];
+                        u8 a = img[i + 3];
+
+                        buffer.set(x, y, {r, g, b, a});                           
+                    }
+                }
+
+                break;
+        }
+
+
+        stbi_image_free(img);
+    }
+
+    return buffer;
+}
+
+class Texture {
+    public:
+        SDL_Texture *id;
+
+        i32 pitch; // pixel buffer memory padding size
+        i32 row_width;
+        
+        // Avoid using this directly, use the .get method instead or just copy the texture via the .copy method
+        u32 *pixel_buffer; // Does not get changed to null when texture is locked
+
+        bool loaded = false; //Incase i ever feel the need to add texture streaming
+
+        bool locked = false; // is the texture locked e.g Can i access the pixel buffer
+
+        void init(SDL_Renderer *renderer, i32 width, i32 height) {
+            id = SDL_CreateTexture(
+                renderer,
+                SDL_PIXELFORMAT_RGBA8888,
+                SDL_TEXTUREACCESS_STREAMING,
+                width, height
+            );
+        }
+
+        void destroy() {
+            if (id) {
+                SDL_DestroyTexture(id);
+                id = nullptr;
+            }
+
+            pixel_buffer = nullptr;
+            loaded = false;
+        }
+
+        ~Texture() {
+            destroy();
+        }
+
+        inline void lock() {
+            locked = true;
+            void *pixels;
+
+            SDL_LockTexture(id, NULL, &pixels, &pitch);
+            pixel_buffer = (u32*)pixels;
+            row_width = pitch / 4;
+        }
+
+        inline void unlock() {
+            SDL_UnlockTexture(id);
+            locked = false;
+        }
+
+        // does not check if texture is locked or not
+        u32 *get(u32 x, u32 y) {
+            return &pixel_buffer[y * row_width + x];
+        }
+
+        // If the texture buffer passed isn't the same dimensions as the gpu texture
+        // Its gonna start over writing shit and gonna be a massive pain to fix
+        void copy(std::shared_ptr<buf2<rgba>> buf) {
+            memcpy(pixel_buffer, buf->data.data(), buf->data.size() * sizeof(u32));
+        }
+};
+
+class Texture_manager {
+    private:
+        std::unordered_map<std::string, std::shared_ptr<Texture>> textures;
+
+    public:
+        std::shared_ptr<Texture> get(std::string index) {
+            return textures[index];
+        }
+
+        void set(std::shared_ptr<Texture> texture, std::string index) {
+            textures[index] = texture;
+        }
+};
+
+/*
 
 class Texture {
     public:
@@ -32,26 +155,6 @@ class Texture {
             }
         }
 
-        /*void render(
-            pipeline_renderer *renderer,
-            u32 x_offset, u32 y_offset
-        ) {
-            std::cout << "render_world()\n";
-
-            for (u32 x = 0; x < data->width; x++) {
-                for (u32 y = 0; y < data->height; y++) {
-                    
-                    rgba *color = data->get(x, y);
-
-                    renderer->draw_pixel(
-                        x_offset + x,
-                        y_offset + y,
-                        *color
-                    );
-
-                }
-            }
-        }*/
 };
 class Frame {
     public:
@@ -106,7 +209,7 @@ class Animation {
             elapsed_time += deltatime;
 
             if ( elapsed_time >= 1000.0 / framerate) {
-                /* cycle animation */
+       
                 
                 if (frame_index == frame_count) frame_index = 0;
                 else frame_index++;
@@ -117,11 +220,7 @@ class Animation {
 
     };
 
-/* Simular to the world surfaces uses a texture_id to better batch render
-certain repeating textures in the world, the same is done for animations,
-as there might be alot of them for say particels, player movement and so on, which is just
-a fancy way of changing the texture a few times a second, lowk just might remove ts if it get to annoying to fix
-*/
+
 class Animation_manager{
 public:
     std::unordered_map<u32, std::shared_ptr<Animation>> animations;
@@ -165,8 +264,8 @@ public:
         return animation.ptr->get_current_frame();
     }
 
-    /* the path should be a directory of images "dir/x.png"
-    also remember to add a / after the dir name */
+    // the path should be a directory of images "dir/x.png"
+    //also remember to add a / after the dir name 
     void init_animation(std::string path, std::string filetype, u32 frame_count, u32 client_fps) {
         animation.ptr = std::make_unique<Animation>();
         animation.ptr->init(frame_count, client_fps);
@@ -198,51 +297,6 @@ class Texture_manager {
             textures[index] = texture;
         }
 };
-
-buf2<rgba> load_image(std::string path) {
-    buf2<rgba> buffer(0, 0);
-
-    i32 w, h, channels;
-    u8 *img = stbi_load(path.c_str(), &w, &h, &channels, 0);
-    if (img) {
-        buffer.reserve(w, h);
-        switch(channels) {
-            case 3:                
-                for (i32 x = 0; x < w; x++) {
-                    for (i32 y = 0; y < h; y++) {
-                        i32 i = (y * w * x) * channels;
-
-                        u8 r = img[i];
-                        u8 g = img[i + 1];
-                        u8 b = img[i + 2];
-                
-                        buffer.set(x, y, {r, g, b, 255});                           
-                    }
-                }
-
-            case 4:
-                for (i32 x = 0; x < w; x++) {
-                    for (i32 y = 0; y < h; y++) {
-                        i32 i = (y * w * x) * channels;
-
-                        u8 r = img[i];
-                        u8 g = img[i + 1];
-                        u8 b = img[i + 2];
-                        u8 a = img[i + 3];
-
-                        buffer.set(x, y, {r, g, b, a});                           
-                    }
-                }
-
-                break;
-        }
-
-
-        stbi_image_free(img);
-    }
-
-    return buffer;
-}
 
 buf2<rgba> bilinear_resize(buf2<rgba> *input, u32 new_w, u32 new_h) {
     if (input->is_empty()) {
@@ -281,3 +335,4 @@ buf2<rgba> bilinear_resize(buf2<rgba> *input, u32 new_w, u32 new_h) {
 
     return output;
 }
+*/

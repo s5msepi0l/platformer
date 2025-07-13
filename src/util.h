@@ -62,10 +62,7 @@ void log(T first, Args... args) {
     )
 
 typedef struct {
-    u8 r = 255;
-    u8 g = 255;
-    u8 b = 255;
-    u8 a = 255;
+    u8 r, g, b, a;
 }rgba;
 
 //general coordinate struct
@@ -235,10 +232,9 @@ public:
 
 template <typename T>
 class buf2 {
-private:
+public:
     std::vector<T> data;
 
-public:
     u32 width = 0;
     u32 height = 0;
 

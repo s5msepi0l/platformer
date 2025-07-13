@@ -99,65 +99,81 @@ namespace game_engine {
     /* Get entities nearby, really only used to get collision partners.
      * if in the future there's some performance issues i feel like there
      * could be done some more optimizations relatively easy*/
-    class collision_grid {
-        public:
-            collision_grid(f32 cell_size):cellsize(cell_size) {}
+    template <typename T>
+    class spatial_grid {
+    public:
+        spatial_grid(float cell_size) : cellsize(cell_size) {}
 
-            void clear() {
-                grid.clear();
-            }
+        void update(T* obj) {
+            std::vector<vec2> new_cells = get_occupied_cells(obj);
 
-            void add(entity *src) {
-                // calculate the grid cells that the entity occupies
-                i32 x_start = static_cast<i32>(std::floor(src->transform.pos.x / cellsize));
-                i32 y_start = static_cast<i32>(std::floor(src->transform.pos.y / cellsize));
-
-                i32 x_end = static_cast<i32>(std::floor((src->transform.pos.x + src->transform.size.x) / cellsize));
-                i32 y_end = static_cast<i32>(std::floor((src->transform.pos.y + src->transform.size.y) / cellsize));
-
-                // add the entity to all the cells it overlaps
-                for (i32 x = x_start; x <= x_end; ++x) {
-                    for (i32 y = y_start; y <= y_end; ++y) {
-                        grid[{(f32)x, (f32)y}].push_back(src);
-                    }
-                }
-            }
-
-            std::vector<entity*> get_neighbors(entity *src) {
-                std::vector<entity *> buffer;
-
-                u32 x_start = static_cast<u32>(std::floor(src->transform.pos.x / cellsize));
-                u32 y_start = static_cast<u32>(std::floor(src->transform.pos.y / cellsize));
-
-                u32 x_end = static_cast<int>(std::floor((src->transform.pos.x + src->transform.size.x) / cellsize));
-                u32 y_end = static_cast<int>(std::floor((src->transform.pos.y + src->transform.size.y) / cellsize));
-
-                for (u32 x = x_start; x <= x_end; ++x) {
-                    for (u32 y = y_start; y <= y_end; ++y) {
-                        vec2 cell = {(f32)x, (f32)y};
-                        
-                        if (grid.find(cell) != grid.end()) {
-                            for (u32 i = 0; i<grid[cell].size(); i++) {
-                                buffer.push_back(grid[cell][i]);
-                            }
+            // Remove obj from old cells
+            if (obj_cells.find(obj) != obj_cells.end()) {
+                std::vector<vec2>& old_cells = obj_cells[obj];
+                for (size_t i = 0; i < old_cells.size(); ++i) {
+                    vec2 cell = old_cells[i];
+                    std::vector<T*>& cell_entities = grid[cell];
+                    for (size_t j = 0; j < cell_entities.size(); ++j) {
+                        if (cell_entities[j] == obj) {
+                            // Remove obj from cell_entities vector
+                            cell_entities[j] = cell_entities.back();
+                            cell_entities.pop_back();
+                            break;
                         }
-                    
                     }
                 }
+            }
 
+            // Add obj to new cells
+            for (size_t i = 0; i < new_cells.size(); ++i) {
+                grid[new_cells[i]].push_back(obj);
+            }
+
+            obj_cells[obj] = new_cells;
+        }
+
+        std::vector<T*> get_neighbors(T* obj) const {
+            std::vector<T*> buffer;
+            if (obj_cells.find(obj) == obj_cells.end()) {
                 return buffer;
             }
-            
-        private:
-            f32 cellsize;
-            std::unordered_map<vec2, std::vector<entity*> > grid;
 
-            vec2 get_cell(const vec2 pos) {
-                return {
-                    std::floor(pos.x / cellsize),
-                    std::floor(pos.y / cellsize),
-                };
+            const std::vector<vec2>& cells = obj_cells.at(obj);
+
+            for (size_t i = 0; i < cells.size(); ++i) {
+                vec2 cell = cells[i];
+                if (grid.find(cell) != grid.end()) {
+                    const std::vector<T*>& cell_entities = grid.at(cell);
+                    for (size_t j = 0; j < cell_entities.size(); ++j) {
+                        buffer.push_back(cell_entities[j]);
+                    }
+                }
             }
+
+            return buffer;
+        }
+
+    private:
+        float cellsize;
+        std::unordered_map<vec2, std::vector<T*>> grid;
+        std::unordered_map<T*, std::vector<vec2>> obj_cells;
+
+        std::vector<vec2> get_occupied_cells(T* obj) const {
+            std::vector<vec2> cells;
+
+            int x_start = static_cast<int>(std::floor(obj->transform.pos.x / cellsize));
+            int y_start = static_cast<int>(std::floor(obj->transform.pos.y / cellsize));
+            int x_end = static_cast<int>(std::floor((obj->transform.pos.x + obj->transform.size.x) / cellsize));
+            int y_end = static_cast<int>(std::floor((obj->transform.pos.y + obj->transform.size.y) / cellsize));
+
+            for (int x = x_start; x <= x_end; ++x) {
+                for (int y = y_start; y <= y_end; ++y) {
+                    cells.push_back(vec2{static_cast<float>(x), static_cast<float>(y)});
+                }
+            }
+
+            return cells;
+        }
     };
 
     class ecs {
@@ -272,27 +288,46 @@ namespace game_engine {
     class frametime_manager {
     private:
         f32 frame_time;
-
         f64 start_time;
         f64 elapsed_time;
+        f64 actual_frame_time;
+        f32 current_fps;
 
     public:
-        inline void set_frametime(u32 Frame_time) { this->frame_time = std::floor(1000.0 / Frame_time); }
+        frametime_manager() : frame_time(16.67f), current_fps(0.0f) {}
+
+        inline void set_frametime(u32 Frame_time) {
+            this->frame_time = std::floor(1000.0 / Frame_time);
+        }
 
         inline void set_start() {
             start_time = SDL_GetTicks64();
         }
 
-
-        // call this function after you've finished frame creating, rendering, keyboard polling etc and are
-        // about to restart the loop
         inline void set_end() {
-            elapsed_time = SDL_GetTicks64() - start_time;
+            f64 now = SDL_GetTicks64();
+            elapsed_time = now - start_time;
+
             if (elapsed_time < frame_time) {
-                SDL_Delay(frame_time);
+                SDL_Delay(static_cast<u32>(frame_time - elapsed_time));
+                actual_frame_time = frame_time;  
+            } else {
+                actual_frame_time = elapsed_time; 
             }
+
+            if (actual_frame_time > 0.0)
+                current_fps = 1000.0f / static_cast<f32>(actual_frame_time);
+            else
+                current_fps = 0.0f;
+
+
+        }
+
+        inline f32 get_fps() const {
+            return current_fps;
         }
     };
+
 
     class State {
         public:
