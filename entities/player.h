@@ -18,6 +18,8 @@ class character_controller: public game_engine::component {
 		void tick(){
 			vec2 move = self->state->input->poll_axis() * speed;
 			self->transform.pos += (move * self->state->deltatime);
+
+			LOG("Player pos", this->self->transform.pos.x, this->self->transform.pos.y, "\n");
 			//self->transform.pos += move;
 			//std::cout << "deltatime: " << game_engine::state::state.deltatime << "\n";
 			//std::cout << "x: " << self->transform.pos.x << "\n";
@@ -37,6 +39,7 @@ class player : public game_engine::entity {
 			collidable = true;
 
 			transform.size = player_size;
+			transform.pos = player_size;
 
 		}
 };

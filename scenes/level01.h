@@ -9,12 +9,15 @@ enum surface_type : u16 {
 
 class level01 : public Scene {
     public:
+    game_engine::engine *engine;
     game_engine::State *state;
-    level01() {
+    void init(game_engine::State *State, game_engine::engine *Engine) {
+        this->state = State;
+        this->engine = Engine;
 
         Texture texture;
         LOG("Initalize random Texture");
-        texture.init_random({102, 255, 102}, 50, 50);
+        texture.init_random({102, 255, 255}, 50, 50);
 
         LOG("Apply random texture, texture ID: ", surface_type::plane);
         state->texture_manager->set(texture, surface_type::plane);
@@ -22,10 +25,10 @@ class level01 : public Scene {
 
         Surface surface;
         surface.size = {50, 50};
-        surface.pos = {25, 50};
+        surface.pos = {100, 100};
         
         LOG("Push level surface");
-        this->surfaces[surface_type::plane].push_back(surface);
+        this->add_surface(surface, surface_type::plane);
     }
 
     void start() {}

@@ -37,16 +37,21 @@ public:
     renderers z-buffer
     */
     void render(pipeline_renderer *renderer) {
+        LOG("Render scene\n");
+        LOG("texture id.size()", texture_id.size(), "\n");
         for (u32 i = 0; i < texture_id.size(); i++) {
             for (u32 j = 0; j < surfaces[texture_id[i]].size(); j++) {
-                Surface surface = surfaces[i][j];
+                u32 tex_id = texture_id[i];
+                Surface surface = surfaces[tex_id][j];
 
                 render_object object;
 
                 object.pos = {surface.pos.x, surface.pos.y};
-                object.size = {surface.size.x, surface.pos.y};
+                object.size = {surface.size.x, surface.size.y};
 
+                LOG("Surface b4: ", i, "x, ", object.pos.x, "y, ", object.pos.y, "w, ", object.size.x, "h, ", object.size.y, "\n");
                 renderer->z_buffer_push(object, surface.z_index, texture_id[i]);
+                LOG("Surface after: ", i, "x, ", object.pos.x, "y, ", object.pos.y, "w, ", object.size.x, "h, ", object.size.y, "\n");
             }
         }
     }
@@ -63,6 +68,6 @@ class Scene_manager {
         }
     
     
-    private:
+    public:
         std::unordered_map<std::string, std::unique_ptr<Scene>> scences;
 };

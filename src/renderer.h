@@ -1,5 +1,14 @@
 #pragma once
 
+/*
+    Turns out making 50k gpu calls per frame takes a while so a bunch of this is probably
+    gonna have to be refactored to support gpu-side textures, along with animations, textures
+    and 90% of the renderer ;(
+
+    alr turns out sdl doesn't suppport gpu batch rendering sooo better hope the scenes are <1000 entities, surfaces & whatever else
+
+*/
+
 #include "renderer.h"
 #include "util.h"
 #include "game_engine.h"
@@ -27,27 +36,7 @@ public:
     uvec16 size;
 };
 
-typedef struct {
-    std::unordered_map<u32, std::vector<render_object>> textures;
-    std::vector<u32> texture_id;
-
-    void add(u32 texture, render_object object) {
-        if (textures.find(texture) == textures.end()) {
-            texture_id.push_back(texture);
-        }
-
-        textures[texture].push_back(object);
-    }
-}texture_map;
-
-/* z buffer, uses i32 as a key*/
-typedef struct {
-    std::unordered_map<i32, texture_map> buffer;
-    std::vector<i32> levels; // use std::set instead of vector 
-    
-}Z_buffer;
-
-class pipeline_renderer {
+class Renderer {
 private:
     SDL_Window* window;
     SDL_Renderer* renderer;
@@ -61,7 +50,7 @@ private:
     u32 window_height = 900;
 
 public:
-    Z_buffer z_buffer;
+    
 
 public:
     void init(u32 w, u32 h){
@@ -125,27 +114,39 @@ public:
     ) {
         z_buffer.buffer[z_index].add(texture_id, object);
 
-        auto it = std::lower_bound(z_buffer.levels.begin(), z_buffer.levels.end(), z_index, std::greater<i32>());
+        auto it = std::lower_bound(z_buffer.levels.begin(), z_buffer.levels.end(), z_index);
         if (it == z_buffer.levels.end() || *it != z_index) {
             z_buffer.levels.insert(it, z_index);
         }
     }
 
     void z_buffer_frame_gen(Texture_manager *texture_manager, Animation_manager *animation_manager) {
+        std::cout << "[Z-Buffer] Generating frame\n";
         for (i32 z_index = 0; z_index < z_buffer.levels.size(); z_index++) {
-            for (i32 tx_index = 0; tx_index < z_buffer.buffer[z_buffer.levels[z_index]].texture_id.size(); tx_index++) {
-                for (i32 surface_index = 0; surface_index < z_buffer.buffer[z_buffer.levels[z_index]].textures[tx_index].size(); surface_index++) {
-                    render_object object = z_buffer.buffer[z_buffer.levels[z_index]].textures[tx_index][surface_index];
-
-                    Texture texture = texture_manager->get(tx_index);
-                    
-
-                    render_texture(texture, object.pos, object.size);
+            i32 level = z_buffer.levels[z_index];
+            std::cout << "  [Level " << level << "] Processing...\n";
+    
+            texture_map& map = z_buffer.buffer[level];
+            for (i32 tx_i = 0; tx_i < map.texture_id.size(); tx_i++) {
+                u32 texture_id = map.texture_id[tx_i];
+                std::vector<render_object>& objects = map.textures[texture_id];
+    
+                std::cout << "    [Texture " << texture_id << "] "
+                          << objects.size() << " objects\n";
+    
+                for (i32 i = 0; i < objects.size(); i++) {
+                    render_object& obj = objects[i];
+                    std::cout << "      Rendering Object " << i
+                              << " at pos(" << obj.pos.x << ", " << obj.pos.y << ")"
+                              << " size(" << obj.size.x << ", " << obj.size.y << ")\n";
+    
+                    Texture texture = texture_manager->get(texture_id);
+                    render_texture(texture, obj.pos, obj.size);
                 }
-
-            } 
+            }
         }
     }
+    
 
     void render_texture(Texture &texture, uvec16 offset, uvec16 size) {
         std::shared_ptr<buf2<rgba>> data;

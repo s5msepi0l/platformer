@@ -400,7 +400,6 @@ namespace game_engine {
 
             //return exit code, normal: 0, general error: -1
             u8 run() {
-                std::cout << "run()\n";
                 state.renderer->start_frame();
                 state.frametime->set_start();
 
@@ -419,13 +418,21 @@ namespace game_engine {
                     state.tick.ticks = 0.0;
                 }
 
-                LOG("Check collision between entities");
+                //state.scene.
+                state.scene->render(state.renderer.get());
+
+                for (const auto& [key, val] : state.scene_manager->scences) {
+                    std::cout << "scene name: " << key << std::endl;
+                }
+
+                LOG("surface size", state.scene->surfaces.size(), "\n");
+                //LOG("Check collision between entities");
                 collision_detection();
 
-                LOG("depth buffer frame generation\n");                
+                //LOG("depth buffer frame generation\n");                
                 state.renderer->z_buffer_frame_gen(state.texture_manager.get(), state.animation_manager.get());
 
-                LOG("Output render");
+                //LOG("Output render");
                 state.renderer->render_frame();
 
                 

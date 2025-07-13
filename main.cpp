@@ -11,7 +11,8 @@ int main(int argc, const char *argv[]) {
     std::cout << "pre load_level(std::string )\n";
     
     std::unique_ptr<level01> scene = std::make_unique<level01>();
-    scene->state = &game.state;
+    LOG("Assign state");
+    scene->init(&game.state, &game);
     game.load_level("level01", std::move(scene));
 
 
