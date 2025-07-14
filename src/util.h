@@ -6,6 +6,7 @@
 #include <iostream>
 #include <vector>
 #include <fstream>
+#include <algorithm>
 #include <cmath>
 #include <map>
 #include <list>
@@ -118,7 +119,6 @@ using svec32 = vector2<i32>;
 using uvec16 = vector2<u16>;
 using svec16 = vector2<i16>;
 
-// Define a custom hash function for vec2
 namespace std {
     template <>
     struct hash<vec2> {
@@ -129,6 +129,16 @@ namespace std {
             
             // Combine the two hash values to get a single hash
             return h1 ^ (h2 << 1); // XOR with left shift
+        }
+    };
+
+    template <>
+    struct hash<uvec16> {
+        std::size_t operator()(const uvec16 &v) const {
+            std::size_t h1 = std::hash<u16>{}(v.x);
+            std::size_t h2 = std::hash<u16>{}(v.y);
+            
+            return h1 ^ (h2 << 1);
         }
     };
 }

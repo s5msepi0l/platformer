@@ -104,10 +104,15 @@ namespace game_engine {
     public:
         spatial_grid(float cell_size) : cellsize(cell_size) {}
 
+        T* add(std::unique_ptr<T> obj) {
+            T* ptr = obj.get();
+            owned_objects.push_back(std::move(obj));
+            update(ptr);
+            return ptr;
+        }
+
         void update(T* obj) {
             std::vector<vec2> new_cells = get_occupied_cells(obj);
-
-            // Remove obj from old cells
             if (obj_cells.find(obj) != obj_cells.end()) {
                 std::vector<vec2>& old_cells = obj_cells[obj];
                 for (size_t i = 0; i < old_cells.size(); ++i) {
@@ -115,7 +120,6 @@ namespace game_engine {
                     std::vector<T*>& cell_entities = grid[cell];
                     for (size_t j = 0; j < cell_entities.size(); ++j) {
                         if (cell_entities[j] == obj) {
-                            // Remove obj from cell_entities vector
                             cell_entities[j] = cell_entities.back();
                             cell_entities.pop_back();
                             break;
@@ -123,12 +127,9 @@ namespace game_engine {
                     }
                 }
             }
-
-            // Add obj to new cells
             for (size_t i = 0; i < new_cells.size(); ++i) {
                 grid[new_cells[i]].push_back(obj);
             }
-
             obj_cells[obj] = new_cells;
         }
 
@@ -137,9 +138,7 @@ namespace game_engine {
             if (obj_cells.find(obj) == obj_cells.end()) {
                 return buffer;
             }
-
             const std::vector<vec2>& cells = obj_cells.at(obj);
-
             for (size_t i = 0; i < cells.size(); ++i) {
                 vec2 cell = cells[i];
                 if (grid.find(cell) != grid.end()) {
@@ -149,29 +148,36 @@ namespace game_engine {
                     }
                 }
             }
-
             return buffer;
         }
 
-    private:
-        float cellsize;
+        std::vector<T*> get_entities_in_cell(const vec2& cell) const {
+            auto it = grid.find(cell);
+            if (it != grid.end()) {
+                return it->second;
+            }
+            return {};
+        }
+
+    
+        std::vector<std::unique_ptr<T>> owned_objects;
         std::unordered_map<vec2, std::vector<T*>> grid;
         std::unordered_map<T*, std::vector<vec2>> obj_cells;
+        float cellsize;
+    
+        private:
 
         std::vector<vec2> get_occupied_cells(T* obj) const {
             std::vector<vec2> cells;
-
             int x_start = static_cast<int>(std::floor(obj->transform.pos.x / cellsize));
             int y_start = static_cast<int>(std::floor(obj->transform.pos.y / cellsize));
             int x_end = static_cast<int>(std::floor((obj->transform.pos.x + obj->transform.size.x) / cellsize));
             int y_end = static_cast<int>(std::floor((obj->transform.pos.y + obj->transform.size.y) / cellsize));
-
             for (int x = x_start; x <= x_end; ++x) {
                 for (int y = y_start; y <= y_end; ++y) {
                     cells.push_back(vec2{static_cast<float>(x), static_cast<float>(y)});
                 }
             }
-
             return cells;
         }
     };
@@ -335,10 +341,9 @@ namespace game_engine {
             Scene* scene;
 
             std::unique_ptr<ecs> entities;
-            std::unique_ptr<pipeline_renderer> renderer;
+            std::unique_ptr<Renderer> renderer;
 
             std::unique_ptr<Texture_manager> texture_manager;
-            std::unique_ptr<Animation_manager> animation_manager;
         
             std::unique_ptr<frametime_manager> frametime;
             std::unique_ptr<Deltatime> delta_time;
@@ -363,7 +368,7 @@ namespace game_engine {
 
             State() {
                 entities =         std::make_unique<ecs>();
-                renderer =         std::make_unique<pipeline_renderer>();
+                renderer =         std::make_unique<Renderer>();
                 frametime =        std::make_unique<frametime_manager>();
 
                 delta_time =       std::make_unique<Deltatime>();
@@ -371,7 +376,6 @@ namespace game_engine {
 
                 scene_manager =    std::make_unique<Scene_manager>();
                 texture_manager =  std::make_unique<Texture_manager>();
-                animation_manager =std::make_unique<Animation_manager>();
             }
     };
 
@@ -394,7 +398,7 @@ namespace game_engine {
 
                 state.cfg.width =  width;
                 state.cfg.height = height;
-                state.renderer->init(width, height);
+                state.renderer->init(width, height, state.texture_manager.get());
             }
 
             ~engine() { }
@@ -460,12 +464,13 @@ namespace game_engine {
                     std::cout << "scene name: " << key << std::endl;
                 }
 
-                LOG("surface size", state.scene->surfaces.size(), "\n");
+                
                 //LOG("Check collision between entities");
+                // remove ts, its shit and makes me wanna cry
                 collision_detection();
 
                 //LOG("depth buffer frame generation\n");                
-                state.renderer->z_buffer_frame_gen(state.texture_manager.get(), state.animation_manager.get());
+
 
                 //LOG("Output render");
                 state.renderer->render_frame();

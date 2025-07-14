@@ -28,6 +28,8 @@ class level01 : public Scene {
         surface.pos = {100, 100};
         
         LOG("Push level surface");
+
+        
         this->add_surface(surface, surface_type::plane);
     }
 

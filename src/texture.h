@@ -111,7 +111,20 @@ class Texture {
         void copy(std::shared_ptr<buf2<rgba>> buf) {
             memcpy(pixel_buffer, buf->data.data(), buf->data.size() * sizeof(u32));
         }
+
+        bool operator==(const Texture& other) const {
+            return id == other.id;
+        }
 };
+
+namespace std {
+    template<>
+    struct hash<Texture> {
+        std::size_t operator()(const Texture& tex) const noexcept {
+            return std::hash<SDL_Texture*>{}(tex.id);
+        }
+    };
+}
 
 class Texture_manager {
     private:
@@ -126,6 +139,8 @@ class Texture_manager {
             textures[index] = texture;
         }
 };
+
+
 
 /*
 

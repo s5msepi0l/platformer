@@ -21,25 +21,70 @@
 #define VISABLE   1
 #define INVISIBLE 0
 
+#define RENDER_QUEUE_DEFAULT_QUEUE_SIZE 64
+
+/* *unused*
 // mainly used for storing pixel offset but can be used for most other applications as long as the 
 // required prescision > 65k
 typedef struct {
     u16 x;
     u16 y;
-} px_offset;
+} px_offset;*/
 
 
-//object thats passed to the zbuffer 
-class render_object {
+class Render_command {
 public:
-    uvec16 pos;
-    uvec16 size;
+    uvec16 pos, size;
+    f64 rotation;
+
+    i32 z_index;
+
+    // some kind of texture scaling parameter might
+    // be needed in the future
+};
+
+
+// should HO
+class Render_queue {
+public:
+    i32 default_queue_size;
+
+    std::unordered_map<std::shared_ptr<Texture>, std::vector<Render_command>> queues;
+
+    void init(i32 d_queue_size = -1) {
+        if (d_queue_size < 0)
+            default_queue_size = RENDER_QUEUE_DEFAULT_QUEUE_SIZE;
+        else default_queue_size = d_queue_size;
+    }
+
+    void push(Render_command data, std::shared_ptr<Texture> texture) {
+        queues[texture].push_back(data);
+    }
+
+    // call before starting to iterate through list
+    void sort() {
+        for (auto &[texture_id, queue] : queues) {
+            std::sort(queue.begin(), queue.end(), [](const Render_command &a, const Render_command &b) {
+                return a.z_index < b.z_index; // i got no clue if this sorts it high-low, or low-high
+            });
+        }
+    }
+
+    // call before new frame
+    void clear() {
+        for (auto &[tex_id, queue] : queues) {
+            queue.clear();
+            queue.reserve(default_queue_size);
+        }
+    }
 };
 
 class Renderer {
 private:
     SDL_Window* window;
     SDL_Renderer* renderer;
+
+    Texture_manager *texture_manager;
 
     u32 width  = 320;
     u32 height = 180;
@@ -50,10 +95,15 @@ private:
     u32 window_height = 900;
 
 public:
-    
+    Render_queue render_queue;
 
 public:
-    void init(u32 w, u32 h){
+    void init(u32 w, u32 h, Texture_manager *texture_manager)
+    {
+        render_queue.init();
+
+        this->texture_manager = texture_manager;
+
         window_width =  w;
         window_height = h;
 
@@ -92,7 +142,7 @@ public:
     
     }
 
-    ~pipeline_renderer() {
+    ~Renderer() {
         SDL_DestroyWindow(window);
         SDL_DestroyRenderer(renderer);
         SDL_Quit();
@@ -107,67 +157,8 @@ public:
         SDL_RenderPresent(renderer);
     }
 
-    void z_buffer_push(
-        render_object object,
-        i32 z_index,
-        u32 texture_id
-    ) {
-        z_buffer.buffer[z_index].add(texture_id, object);
-
-        auto it = std::lower_bound(z_buffer.levels.begin(), z_buffer.levels.end(), z_index);
-        if (it == z_buffer.levels.end() || *it != z_index) {
-            z_buffer.levels.insert(it, z_index);
-        }
-    }
-
-    void z_buffer_frame_gen(Texture_manager *texture_manager, Animation_manager *animation_manager) {
-        std::cout << "[Z-Buffer] Generating frame\n";
-        for (i32 z_index = 0; z_index < z_buffer.levels.size(); z_index++) {
-            i32 level = z_buffer.levels[z_index];
-            std::cout << "  [Level " << level << "] Processing...\n";
-    
-            texture_map& map = z_buffer.buffer[level];
-            for (i32 tx_i = 0; tx_i < map.texture_id.size(); tx_i++) {
-                u32 texture_id = map.texture_id[tx_i];
-                std::vector<render_object>& objects = map.textures[texture_id];
-    
-                std::cout << "    [Texture " << texture_id << "] "
-                          << objects.size() << " objects\n";
-    
-                for (i32 i = 0; i < objects.size(); i++) {
-                    render_object& obj = objects[i];
-                    std::cout << "      Rendering Object " << i
-                              << " at pos(" << obj.pos.x << ", " << obj.pos.y << ")"
-                              << " size(" << obj.size.x << ", " << obj.size.y << ")\n";
-    
-                    Texture texture = texture_manager->get(texture_id);
-                    render_texture(texture, obj.pos, obj.size);
-                }
-            }
-        }
-    }
-    
-
-    void render_texture(Texture &texture, uvec16 offset, uvec16 size) {
-        std::shared_ptr<buf2<rgba>> data;
-
-        //automatically scale the texture, slow as hell but saves me alot of headaches, might need caching in the future
-        if (texture.data->width != size.x || texture.data->height != size.y) {
-            data = std::make_shared<buf2<rgba>>(bilinear_resize(texture.data.get(), size.x, size.y));
-        } else {
-            data = texture.data;
-        }
-
-        for (u16 x = 0; x < size.x; x++) {
-            for (u16 y = 0; y < size.y; y++) {
-                draw_pixel(
-                    x + offset.x,
-                    y + offset.y,
-                    *data->get(x, y)
-                );
-
-            }
-        }
+    void push_queue(Render_command data, std::shared_ptr<Texture> texture) {
+        render_queue.push(data, texture);
     }
 
     void test() {

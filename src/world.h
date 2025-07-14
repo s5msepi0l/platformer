@@ -4,12 +4,16 @@
 #include "util.h"
 
 typedef struct {
-    vec2 pos;
-    vec2 size;
+    vec2 pos, size;
 
+    f64 rotation;
     i32 z_index;
-}Surface;
 
+    std::shared_ptr<Texture> texture;
+
+    //Add other stuff here if needed like material or whatever
+
+}Surface;
 
 class Scene {
 public:
@@ -18,43 +22,46 @@ public:
     virtual void stop()   = 0;
 
 public:
+    Scene(game_engine::State *state, f32 spatial_grid_size = 32.0): // just a wild guess of what
+    // works but should probably be changed according to needs
+    surfaces(32.0),
+    state(state) {
 
+    }
 
     /*Add lights, and other stuff here */
 
-    std::unordered_map<u32, std::vector<Surface>>  surfaces;
-    std::vector<u32> texture_id;
+    game_engine::spatial_grid<Surface> surfaces;
 
-    void add_surface(Surface surface, u32 texture) {
-        if (surfaces.find(texture) == surfaces.end()) {
-            texture_id.push_back(texture);
-        }
-
-        surfaces[texture].push_back(surface);
-    }
-
-    /* doesn't render anything by itself it just pushes the current surfaces to the
-    renderers z-buffer
+    /* 
     */
-    void render(pipeline_renderer *renderer) {
+    void render(Renderer *renderer) {
         LOG("Render scene\n");
-        LOG("texture id.size()", texture_id.size(), "\n");
-        for (u32 i = 0; i < texture_id.size(); i++) {
-            for (u32 j = 0; j < surfaces[texture_id[i]].size(); j++) {
-                u32 tex_id = texture_id[i];
-                Surface surface = surfaces[tex_id][j];
 
-                render_object object;
+        for (const auto& pair : surfaces.grid) {
+            const std::vector<Surface*> &surface_grid = pair.second;
+            for (size_t i = 0; i < surface_grid.size(); ++i) {
+                Surface *surface = surface_grid[i];
 
-                object.pos = {surface.pos.x, surface.pos.y};
-                object.size = {surface.size.x, surface.size.y};
+                // pass surface parameters to renderer
 
-                LOG("Surface b4: ", i, "x, ", object.pos.x, "y, ", object.pos.y, "w, ", object.size.x, "h, ", object.size.y, "\n");
-                renderer->z_buffer_push(object, surface.z_index, texture_id[i]);
-                LOG("Surface after: ", i, "x, ", object.pos.x, "y, ", object.pos.y, "w, ", object.size.x, "h, ", object.size.y, "\n");
+                /* scene manager requests texture X -> from texture manager
+                    if Texture X is not in cache send request via queue and return
+                    Placeholder Texture -> pack level data into render_command
+                    and add
+
+                    Probably slow asf but hey Im expecting ts to be able make up to 1000+
+                    gpu calls per frame so i doubt this is gonna get bottlenecked
+                    by copying a few pointers
+                */
             }
         }
+
     }
+
+private:
+    game_engine::State *state;
+    Renderer *renderer;
 };
 
 class Scene_manager {
